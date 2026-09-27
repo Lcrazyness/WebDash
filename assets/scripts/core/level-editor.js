@@ -433,6 +433,8 @@ class LevelEditor {
     this._editGroupBtnVisual = this._editGroupBtn;
     this._editGroupBtnHit = this._editGroupBtn;
     this._deselectBtn = this.add.image(0, 150, "GJ_GameSheet03", "GJ_deSelBtn2_001.png").setInteractive().setScale(1);
+    this._undoBtn = this.add.image(0, 225, "GJ_GameSheet03", "GJ_undoBtn_001.png").setInteractive().setScale(1);
+    this._redoBtn = this.add.image(-75, 225, "GJ_GameSheet03", "GJ_redoBtn_001.png").setInteractive().setScale(1);
 
     this._editorLayerSelector = this.add.container(-75, 275);
     this._editorLayerFirstBtn = this.add.image(-90, 0, "GJ_GameSheet03", "GJ_arrow_02_001.png").setInteractive().setScale(0.45).setAlpha(0.5);
@@ -450,7 +452,7 @@ class LevelEditor {
         this._editorLayerLastBtn
     ]);
 
-    this._sideButtons.add([this._copyPasteBtn, this._editGroupBtn, this._editObjectBtn, this._deselectBtn, this._editorLayerSelector]);
+    this._sideButtons.add([this._copyPasteBtn, this._editGroupBtn, this._editObjectBtn, this._deselectBtn, this._undoBtn, this._redoBtn, this._editorLayerSelector]);
 
     this._makeBouncyButton(this._copyPasteBtn, 1, () => {
         this._duplicateSelectedObject();
@@ -473,6 +475,8 @@ class LevelEditor {
     this._makeBouncyButton(this._deselectBtn, 1, () => {
         this._clearEditorSelection();
     });
+    this._makeBouncyButton(this._undoBtn, 1, () => this._undoEditorAction(), () => (this._editorHistoryUndo?.length || 0) > 0);
+    this._makeBouncyButton(this._redoBtn, 1, () => this._redoEditorAction(), () => (this._editorHistoryRedo?.length || 0) > 0);
 
     this._editorLayerOptions = this._getEditorLayerOptions ? this._getEditorLayerOptions() : [null, 0];
     this._editorActiveLayerIndex = 0;
