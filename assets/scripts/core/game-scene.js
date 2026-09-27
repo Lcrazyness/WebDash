@@ -1663,6 +1663,20 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
         }
     };
     this._queueSyncedLevelText = async (levelFileName, localPath) => {
+        try {
+            const localResponse = await fetch(localPath, {
+                cache: "no-store",
+                credentials: "same-origin"
+            });
+
+            if (localResponse.ok) {
+                this.load.text(levelFileName, localPath);
+                window._webDashLevelSyncSource = "local";
+                return "local";
+            }
+        } catch (error) {
+        }
+
         const rawName = String(levelFileName || "");
         const ids = rawName.match(/\d+/g);
         const levelId = ids && ids.length ? ids[ids.length - 1] : "";
@@ -1684,13 +1698,13 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
                     }
                 }
             } catch (error) {
-                console.warn("Live level sync failed, using local copy:", error);
+                console.warn("Live level sync failed:", error);
             }
         }
 
         this.load.text(levelFileName, localPath);
-        window._webDashLevelSyncSource = "local";
-        return "local";
+        window._webDashLevelSyncSource = "local-fallback";
+        return "local-fallback";
     };
 
     this._exportGMD = (level) => {
