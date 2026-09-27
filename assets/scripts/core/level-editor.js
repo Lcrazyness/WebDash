@@ -2627,24 +2627,16 @@ class LevelEditor {
   _captureEditorHistorySnapshot() {
     const sourceObjects = Array.isArray(window.levelObjects) ? window.levelObjects : [];
     const selectedIds = this._getCurrentSelectedEditorObjectIds ? this._getCurrentSelectedEditorObjectIds() : [];
-    const selectedKeys = [];
-
-    for (let index = 0; index < sourceObjects.length; index++) {
-        const object = sourceObjects[index];
-        if (!object) continue;
-        if (!object._editorHistoryUid) {
-            object._editorHistoryUid = "editor-" + index + "-" + String(object._eeObjectId ?? "") + "-" + Math.random().toString(36).slice(2, 8);
-        }
-    }
+    const selectedIndices = [];
 
     for (const objectId of selectedIds) {
-        const object = this._getEditorSaveObjectForObjectId(objectId);
-        if (object?._editorHistoryUid) selectedKeys.push(object._editorHistoryUid);
+        const saveIndex = this._getEditorSaveIndexForObjectId(objectId);
+        if (saveIndex !== -1) selectedIndices.push(saveIndex);
     }
 
     const objects = JSON.parse(JSON.stringify(sourceObjects));
     const settings = typeof window.settingslist === "string" ? String(window.settingslist) : "";
-    return { objects, settings, selectedKeys };
+    return { objects, settings, selectedIndices };
   }
 
 
@@ -2684,13 +2676,11 @@ class LevelEditor {
         window.levelObjects = objects;
         window.settingslist = settings;
 
-        const selectedKeys = new Set(Array.isArray(snapshot.selectedKeys) ? snapshot.selectedKeys : []);
+        const selectedIndices = new Set(Array.isArray(snapshot.selectedIndices) ? snapshot.selectedIndices : []);
         const restoredIds = [];
-        for (const object of objects) {
-            if (!object || !object._editorHistoryUid) continue;
-            if (selectedKeys.has(object._editorHistoryUid) && Number.isInteger(object._eeObjectId)) {
-                restoredIds.push(object._eeObjectId);
-            }
+        for (const index of selectedIndices) {
+            const object = objects[index];
+            if (object && Number.isInteger(object._eeObjectId)) restoredIds.push(object._eeObjectId);
         }
 
         this._currentSelectedObjectIds = [];
@@ -2775,6 +2765,7 @@ class LevelEditor {
       this._editorClipboard = sources.map((source) => {
         const clone = JSON.parse(JSON.stringify(source));
         delete clone._eeObjectId;
+        delete clone._editorHistoryUid;
         return clone;
       });
       this._editorPasteCount = 0;
@@ -2806,6 +2797,7 @@ class LevelEditor {
       }
 
       delete clone._eeObjectId;
+      delete clone._editorHistoryUid;
 
       const currentX = Number(clone.x ?? clone._raw?.["2"] ?? 0);
       const currentY = Number(clone.y ?? clone._raw?.["3"] ?? 0);
