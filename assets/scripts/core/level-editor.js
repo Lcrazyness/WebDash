@@ -204,7 +204,7 @@ class LevelEditor {
     this.input.keyboard.on('keydown-D', (event) => {
         if (isEditorShortcut(event)) {
             event.preventDefault();
-            this._duplicateSelectedObject(30, 0);
+            this._duplicateSelectedObject(0, 0);
             return;
         }
 
@@ -2223,6 +2223,7 @@ class LevelEditor {
 
 
   _moveObject(dx, dy) {
+    const editorHistoryBefore = this._captureEditorHistorySnapshot();
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     if (!selectedObjectIds.length) return;
 
@@ -2300,10 +2301,12 @@ class LevelEditor {
     sortTriggers(this._level?._spawnTriggers);
 
     this._refreshEditorCollisionCaches();
+    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
   _rotateObject(degrees) {
+    const editorHistoryBefore = this._captureEditorHistorySnapshot();
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     if (!selectedObjectIds.length) return;
 
@@ -2351,10 +2354,12 @@ class LevelEditor {
     }
 
     this._refreshEditorCollisionCaches();
+    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
   _flipObject(axis) {
+    const editorHistoryBefore = this._captureEditorHistorySnapshot();
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     if (!selectedObjectIds.length) return;
 
@@ -2746,6 +2751,7 @@ class LevelEditor {
         if (canRedo) this._redoBtn.setInteractive();
         else this._redoBtn.disableInteractive();
     }
+    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
@@ -2849,15 +2855,14 @@ class LevelEditor {
 
 
   _pasteEditorClipboard() {
+    const editorHistoryBefore = this._captureEditorHistorySnapshot();
     if (!Array.isArray(this._editorClipboard) || !this._editorClipboard.length) return false;
 
-    const pasteStep = (Number(this._editorPasteCount) || 0) + 1;
-    const offsetX = pasteStep * 30;
-    const newObjectIds = this._spawnEditorObjectCopies(this._editorClipboard, offsetX, 0);
+    const newObjectIds = this._spawnEditorObjectCopies(this._editorClipboard, 0, 0);
 
     if (!newObjectIds.length) return false;
 
-    this._editorPasteCount = pasteStep;
+    this._editorPasteCount = (Number(this._editorPasteCount) || 0) + 1;
     this._selectEditorObjectsByIds(newObjectIds, 0x00ffff);
     this._applyEditorLayerFilter?.();
     this._refreshEditorCollisionCaches();
@@ -2867,10 +2872,12 @@ class LevelEditor {
     this._updateEditorActionButtons();
 
     return true;
+    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
-  _duplicateSelectedObject(offsetX = 30, offsetY = 0) {
+  _duplicateSelectedObject(offsetX = 0, offsetY = 0) {
+    const editorHistoryBefore = this._captureEditorHistorySnapshot();
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     if (!selectedObjectIds.length) return false;
 
@@ -2890,9 +2897,11 @@ class LevelEditor {
     this._refreshEditorCollisionCaches();
     this._buildObjectGrid();
     return true;
+    this._commitEditorHistory(editorHistoryBefore);
   }
 
   _deleteSelectedObject() {
+    const editorHistoryBefore = this._captureEditorHistorySnapshot();
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     if (!selectedObjectIds.length) return;
 
@@ -2933,6 +2942,7 @@ class LevelEditor {
     this._applyEditorLayerFilter?.();
     this._buildObjectGrid();
     this._updateEditorActionButtons();
+    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
@@ -3174,6 +3184,7 @@ class LevelEditor {
     }
 
     _placeObject() {
+    const editorHistoryBefore = this._captureEditorHistorySnapshot();
     const pointer = this.input.activePointer;
 
     const worldX = (this.input.activePointer.x + this._cameraX) / this._editorZoom;
@@ -3311,6 +3322,7 @@ class LevelEditor {
     this._refreshEditorLayerSelectorVisual?.();
     this._applyEditorLayerFilter?.();
     this._refreshEditorPlaytestGlowVisibility?.();
+    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
