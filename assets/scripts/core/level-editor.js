@@ -2638,6 +2638,27 @@ class LevelEditor {
   }
 
 
+  _commitEditorHistory(beforeSnapshot) {
+    if (!beforeSnapshot || this._editorHistoryRestoring) return;
+    const afterSnapshot = this._captureEditorHistorySnapshot();
+    let changed = true;
+    try {
+        changed = JSON.stringify(beforeSnapshot.objects) !== JSON.stringify(afterSnapshot.objects)
+            || beforeSnapshot.settings !== afterSnapshot.settings;
+    } catch (_error) {}
+    if (!changed) {
+        this._updateEditorHistoryButtons?.();
+        return;
+    }
+    this._editorHistoryUndo.push({ before: beforeSnapshot, after: afterSnapshot });
+    if (this._editorHistoryUndo.length > (this._editorHistoryLimit || 75)) {
+        this._editorHistoryUndo.shift();
+    }
+    this._editorHistoryRedo.length = 0;
+    this._updateEditorHistoryButtons?.();
+  }
+
+
   _copySelectedObjectsToClipboard() {
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     const sources = selectedObjectIds
