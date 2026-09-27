@@ -227,6 +227,17 @@ class LevelEditor {
         moveSelectedObjectsWithKey(0, amount);
     });
 
+    this.input.keyboard.on('keydown-Z', (event) => {
+        if (!isEditorShortcut(event)) return;
+        event.preventDefault();
+        this._undoEditorAction();
+    });
+    this.input.keyboard.on('keydown-Y', (event) => {
+        if (!isEditorShortcut(event)) return;
+        event.preventDefault();
+        this._redoEditorAction();
+    });
+
     const moveSelectedObjectsWithKey = (dx, dy) => {
         if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
         this._moveObject(dx, dy);
@@ -298,7 +309,7 @@ class LevelEditor {
             if (!modifier) return;
 
             const key = String(event.key || "").toLowerCase();
-            const blocked = key === "c" || key === "v" || key === "x" || key === "d" || key === "s";
+            const blocked = key === "c" || key === "v" || key === "x" || key === "d" || key === "s" || key === "z" || key === "y";
             if (!blocked) return;
 
             event.preventDefault();
@@ -317,6 +328,10 @@ class LevelEditor {
                 scene._duplicateSelectedObject?.(30, 0);
             } else if (key === "s") {
                 scene._saveEditorLevel?.();
+            } else if (key === "z") {
+                scene._undoEditorAction?.();
+            } else if (key === "y") {
+                scene._redoEditorAction?.();
             }
         }, true);
     }
