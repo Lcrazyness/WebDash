@@ -1021,168 +1021,49 @@ class LevelEditor {
   }
 
 
-  _getEditorGameplayStateAtX(worldX) {
-    const state = {
-      gameMode: Number.parseInt(window.settingsMap?.["kA2"] ?? 0, 10) || 0,
-      miniMode: Number.parseInt(window.settingsMap?.["kA3"] ?? 0, 10) === 1 ? 1 : 0,
-      speed: Number.parseInt(window.settingsMap?.["kA4"] ?? 0, 10) || 0,
-      dualMode: Number.parseInt(window.settingsMap?.["kA8"] ?? 0, 10) === 1 ? 1 : 0,
-      mirrored: Number.parseInt(window.settingsMap?.["kA28"] ?? 0, 10) === 1 ? 1 : 0,
-      gravityFlipped: String(window.settingsMap?.["kA11"] ?? 0) === "1"
-    };
-
-    const speedById = {
-      200: 1,
-      201: 0,
-      202: 2,
-      203: 3,
-      1334: 4
-    };
-
-    const modeBySub = {
-      cube: 0,
-      fly: 1,
-      ship: 1,
-      ball: 2,
-      ufo: 3,
-      wave: 4,
-      robot: 5,
-      spider: 6
-    };
-
-    const fallbackSubById = {
-      10: "gravity_flip",
-      11: "gravity_normal",
-      12: "cube",
-      13: "fly",
-      45: "mirrora",
-      46: "mirrorb",
-      47: "ball",
-      660: "wave",
-      111: "ufo",
-      745: "robot",
-      1331: "spider",
-      286: "dual_on",
-      287: "dual_off"
-    };
-
-    const objects = Array.isArray(window.levelObjects) ? window.levelObjects : [];
-    const events = [];
-
-    for (let index = 0; index < objects.length; index++) {
-      const obj = objects[index];
-      if (!obj || this._isEditorStartPositionId(obj.id)) continue;
-
-      const x = Number(obj._raw?.["2"] ?? obj.x ?? 0);
-      const objectX = Number.isFinite(x) ? x * 2 : 0;
-      if (objectX > Number(worldX || 0) + 0.001) continue;
-
-      const id = Number.parseInt(obj.id ?? 0, 10) || 0;
-      const objectDef = typeof getObjectFromId === "function" ? getObjectFromId(id) : null;
-      const objectType = String(objectDef?.type ?? "");
-
-      const speedValue = speedById[id];
-      const sub = String(objectDef?.sub ?? fallbackSubById[id] ?? "");
-
-      const changesState =
-        speedValue !== undefined ||
-        objectType === "speed" ||
-        modeBySub[sub] !== undefined ||
-        sub === "shrink" ||
-        sub === "grow" ||
-        sub === "dual_on" ||
-        sub === "dual_off" ||
-        sub === "mirrora" ||
-        sub === "mirrorb" ||
-        sub === "gravity_flip" ||
-        sub === "gravity_normal" ||
-        sub === "gravity_toggle";
-
-      if (!changesState) continue;
-
-      events.push({ objectX, id, sub, speedValue, objectType, index });
-    }
-
-    events.sort((a, b) => (a.objectX - b.objectX) || (a.index - b.index));
-
-    for (const event of events) {
-      if (event.speedValue !== undefined) {
-        state.speed = event.speedValue;
-      }
-
-      if (event.objectType === "speed" && event.speedValue !== undefined) {
-        state.speed = event.speedValue;
-      }
-
-      if (modeBySub[event.sub] !== undefined) {
-        state.gameMode = modeBySub[event.sub];
-      }
-
-      if (event.sub === "shrink") state.miniMode = 1;
-      else if (event.sub === "grow") state.miniMode = 0;
-      else if (event.sub === "dual_on") state.dualMode = 1;
-      else if (event.sub === "dual_off") state.dualMode = 0;
-      else if (event.sub === "mirrora") state.mirrored = 1;
-      else if (event.sub === "mirrorb") state.mirrored = 0;
-      else if (event.sub === "gravity_flip") state.gravityFlipped = true;
-      else if (event.sub === "gravity_normal") state.gravityFlipped = false;
-      else if (event.sub === "gravity_toggle") state.gravityFlipped = !state.gravityFlipped;
-    }
-
-    return state;
-  }
-
   _getLatestEditorStartPosition() {
     const positions = [];
 
     if (Array.isArray(window.levelObjects)) {
-      window.levelObjects.forEach((obj, index) => {
-        if (!obj || !this._isEditorStartPositionId(obj.id)) return;
+        window.levelObjects.forEach((obj, index) => {
+            if (!obj || !this._isEditorStartPositionId(obj.id)) return;
 
-        const raw = obj._raw || {};
-        const x = Number(raw["2"] ?? obj.x ?? 0);
-        const y = Number(raw["3"] ?? obj.y ?? 30);
-        const worldX = Number.isFinite(x) ? x * 2 : 0;
-        const worldY = Number.isFinite(y) ? y * 2 : 30;
+            const raw = obj._raw || {};
+            const x = Number(raw["2"] ?? obj.x ?? 0);
+            const y = Number(raw["3"] ?? obj.y ?? 30);
+            const objectId = Number.isInteger(obj._eeObjectId) ? obj._eeObjectId : index;
 
-        const objectId = Number.isInteger(obj._eeObjectId) ? obj._eeObjectId : index;
-        const state = this._getEditorGameplayStateAtX(worldX);
-
-        positions.push({
-          x: worldX,
-          y: worldY,
-          gameMode: state.gameMode,
-          miniMode: state.miniMode,
-          speed: state.speed,
-          dualMode: state.dualMode,
-          mirrored: state.mirrored,
-          gravityFlipped: state.gravityFlipped,
-          _editorObjectId: objectId,
-          _editorSaveIndex: index
+            positions.push({
+                x: Number.isFinite(x) ? x * 2 : 0,
+                y: Number.isFinite(y) ? y * 2 : 30,
+                gameMode: this._getEditorStartPositionValue(obj, "kA2", 0),
+                miniMode: this._getEditorStartPositionValue(obj, "kA3", 0),
+                speed: this._getEditorStartPositionValue(obj, "kA4", 0),
+                dualMode: this._getEditorStartPositionValue(obj, "kA8", 0),
+                mirrored: 0,
+                gravityFlipped: this._getEditorStartPositionValue(obj, "kA11", obj.flipGravity ? 1 : 0) === 1,
+                _editorObjectId: objectId,
+                _editorSaveIndex: index
+            });
         });
-      });
     }
 
-    if (!positions.length && this._level?.getStartPositions) {
-      const levelPositions = this._level.getStartPositions();
-      if (Array.isArray(levelPositions)) {
-        positions.push(...levelPositions.map((pos, index) => ({
-          ...pos,
-          _editorObjectId: Number.isInteger(pos?._editorObjectId) ? pos._editorObjectId : index,
-          _editorSaveIndex: index
-        })));
-      }
+    if (!Array.isArray(window.levelObjects) && !positions.length && this._level?.getStartPositions) {
+        const levelPositions = this._level.getStartPositions();
+        if (Array.isArray(levelPositions)) {
+            positions.push(...levelPositions.map((pos, index) => ({
+                ...pos,
+                mirrored: 0,
+                _editorObjectId: Number.isInteger(pos?._editorObjectId) ? pos._editorObjectId : index,
+                _editorSaveIndex: index
+            })));
+        }
     }
 
-    positions.sort(
-      (a, b) =>
-        ((a.x || 0) - (b.x || 0)) ||
-        ((a._editorObjectId || 0) - (b._editorObjectId || 0)) ||
-        ((a._editorSaveIndex || 0) - (b._editorSaveIndex || 0))
-    );
-
+    positions.sort((a, b) => ((a.x || 0) - (b.x || 0)) || ((a._editorObjectId || 0) - (b._editorObjectId || 0)) || ((a._editorSaveIndex || 0) - (b._editorSaveIndex || 0)));
     return positions.length ? positions[positions.length - 1] : null;
   }
+
 
   _applyEditorPlaytestStartPosition(pos) {
     if (!pos) {
@@ -1197,6 +1078,7 @@ class LevelEditor {
     this._state.lastGroundPosY = startPosY;
     this._state.onGround = true;
     this._state.canJump = true;
+    this._player.setCubeVisible(true);
 
     const speedValues = [
         SpeedPortal.ONE_TIMES,
@@ -1221,14 +1103,12 @@ class LevelEditor {
         this._player.enterRobotMode();
     } else if (gamemode == 6) {
         this._player.enterSpiderMode();
-    } else {
-        this._player.setCubeVisible(true);
     }
 
     this._state.isMini = parseInt(pos.miniMode ?? 0, 10) === 1;
     this._state.gravityFlipped = !!pos.gravityFlipped;
-    this._state.mirrored = !!pos.mirrored;
-    this._state2.mirrored = !!pos.mirrored;
+    this._state.mirrored = false;
+    this._state2.mirrored = false;
 
     if (parseInt(pos.dualMode ?? 0, 10) === 1) {
         this._enableDualMode();
@@ -2711,6 +2591,127 @@ class LevelEditor {
     }
 
     this._selectEditorObjectsByIds(mergedIds, 0x00ff00);
+    return true;
+  }
+
+
+  _copySelectedObjectsToClipboard() {
+    const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
+    const sources = selectedObjectIds
+      .map((objectId) => this._getEditorSaveObjectForObjectId(objectId))
+      .filter(Boolean);
+
+    if (!sources.length) {
+      this._editorClipboard = [];
+      this._editorPasteCount = 0;
+      return false;
+    }
+
+    try {
+      this._editorClipboard = sources.map((source) => {
+        const clone = JSON.parse(JSON.stringify(source));
+        delete clone._eeObjectId;
+        return clone;
+      });
+      this._editorPasteCount = 0;
+      return true;
+    } catch (error) {
+      this._editorClipboard = [];
+      this._editorPasteCount = 0;
+      console.warn("Editor copy failed:", error);
+      return false;
+    }
+  }
+
+
+  _spawnEditorObjectCopies(sources, offsetX = 30, offsetY = 0) {
+    if (!Array.isArray(window.levelObjects) || !Array.isArray(sources) || !sources.length) return [];
+
+    const newObjectIds = [];
+    const saveOffsetX = Number(offsetX || 0) / 2;
+    const saveOffsetY = Number(offsetY || 0) / 2;
+
+    for (const source of sources) {
+      if (!source) continue;
+
+      let clone;
+      try {
+        clone = JSON.parse(JSON.stringify(source));
+      } catch (error) {
+        continue;
+      }
+
+      delete clone._eeObjectId;
+
+      const currentX = Number(clone.x ?? clone._raw?.["2"] ?? 0);
+      const currentY = Number(clone.y ?? clone._raw?.["3"] ?? 0);
+      clone.x = (Number.isFinite(currentX) ? currentX : 0) + saveOffsetX;
+      clone.y = (Number.isFinite(currentY) ? currentY : 0) - saveOffsetY;
+
+      clone._raw = clone._raw || {};
+      clone._raw["2"] = String(clone.x);
+      clone._raw["3"] = String(clone.y);
+
+      window.levelObjects.push(clone);
+      this._level._spawnObject(clone);
+
+      const newObjectId = Math.max(0, (this._level._nextObjectId || 1) - 1);
+      newObjectIds.push(newObjectId);
+
+      const newestSprites = this._level.objectSprites?.[newObjectId];
+      if (newestSprites?.length) {
+        const depthBase = {
+          "-5": -12,
+          "-3": -9,
+          "-1": -6,
+          0: 0,
+          1: 3,
+          3: 6,
+          5: 9,
+          7: 10.5,
+          9: 12,
+          11: 13.5
+        };
+
+        const finalDepth = (depthBase[clone.zLayer] || 0) + ((Number(clone.zOrder) || 0) * 0.01);
+
+        for (const sprite of newestSprites) {
+          if (!sprite) continue;
+          sprite.setDepth((sprite._eeZDepth || finalDepth) + 10);
+
+          if (sprite._eeLayer === 2) {
+            if (this._level.topContainer && !this._level.topContainer.exists(sprite)) {
+              this._level.topContainer.add(sprite);
+            }
+          } else if (this._level.container && !this._level.container.exists(sprite)) {
+            this._level.container.add(sprite);
+          }
+        }
+      }
+    }
+
+    return newObjectIds;
+  }
+
+
+  _pasteEditorClipboard() {
+    if (!Array.isArray(this._editorClipboard) || !this._editorClipboard.length) return false;
+
+    const pasteStep = (Number(this._editorPasteCount) || 0) + 1;
+    const offsetX = pasteStep * 30;
+    const newObjectIds = this._spawnEditorObjectCopies(this._editorClipboard, offsetX, 0);
+
+    if (!newObjectIds.length) return false;
+
+    this._editorPasteCount = pasteStep;
+    this._selectEditorObjectsByIds(newObjectIds, 0x00ffff);
+    this._applyEditorLayerFilter?.();
+    this._refreshEditorCollisionCaches();
+    this._refreshEditorLayerSelectorVisual?.();
+    this._refreshEditorPlaytestGlowVisibility?.();
+    this._buildObjectGrid();
+    this._updateEditorActionButtons();
+
     return true;
   }
 
@@ -9022,6 +9023,9 @@ LevelEditor.methodNames = [
   "_startEditorBoxSelect",
   "_updateEditorBoxSelect",
   "_finishEditorBoxSelect",
+  "_copySelectedObjectsToClipboard",
+  "_pasteEditorClipboard",
+  "_spawnEditorObjectCopies",
   "_duplicateSelectedObject",
   "_deleteSelectedObject",
   "_updateEditorActionButtons",
