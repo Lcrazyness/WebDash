@@ -3759,7 +3759,7 @@ _updateWaveJump(dt) {
     }
 
     const dtSec = Math.max(0, dt > 1 ? dt / 1000 : dt);
-    const movementResponse = 1 - Math.exp(-dtSec / 0.12);
+    const movementResponse = 1 - Math.exp(-dtSec / 0.28);
     this._waveSmoothedVelocity += (_targetWaveVelocity - this._waveSmoothedVelocity) * movementResponse;
 
     this.p.yVelocity = this._waveSmoothedVelocity;
@@ -3772,7 +3772,7 @@ _updateWaveJump(dt) {
         ? Math.max(-1, Math.min(1, this._waveSmoothedVelocity / _waveVel))
         : 0;
     const _targetRotation = -normalizedVelocity * _waveAngle;
-    const rotationResponse = 1 - Math.exp(-dtSec / 0.11);
+    const rotationResponse = 1 - Math.exp(-dtSec / 0.22);
     this._rotation += (_targetRotation - this._rotation) * rotationResponse;
 }
   _updateRobotJump(dt) {
