@@ -387,6 +387,18 @@ class MacroBot {
 
 
 class GameScene extends Phaser.Scene {
+  static _ORB_TYPE_COLOR_MAP = {
+    36: 0xfffb57,
+    84: 0x58ffff,
+    141: 0xff52f0,
+    444: 0xff00d2,
+    1022: 0x63ff5f,
+    1330: 0xffffff,
+    1333: 0xff6326,
+    1594: 0x6cff6b,
+    1704: 0x04ff04,
+    1751: 0xff00d2
+  };
   constructor() {
     super({
       key: "GameScene"
@@ -8029,7 +8041,12 @@ _showwippopup() {
 
     this._cpsIndicator.setVisible(window.showCPS && !this._menuActive);
     if (this._clickHistory && this._clickHistory.length > 0) {
-      this._clickHistory = this._clickHistory.filter(timestamp => this.time.now - timestamp <= 1000);
+      const _cpsNow = this.time.now;
+      let _cpsCut = 0;
+      while (_cpsCut < this._clickHistory.length && _cpsNow - this._clickHistory[_cpsCut] > 1000) {
+        _cpsCut++;
+      }
+      if (_cpsCut > 0) this._clickHistory.splice(0, _cpsCut);
       this._cpsIndicator.setText(`${this._clickHistory.length} CPS`);
     } else {
       this._cpsIndicator.setText("0 CPS");
@@ -8195,14 +8212,12 @@ _showwippopup() {
       this._spaceWasDown = jumpHeld;
     };
 
-    const objectsUnderPointer = this.input.manager.hitTest(
+    const fromClick = this.input.activePointer.isDown;
+    const cancelInput = fromClick && this.input.manager.hitTest(
       this.input.activePointer,
       this._startPosGui.list,
       this.cameras.main
-    );
-    const isOverUI = objectsUnderPointer.length > 0;
-    const fromClick = this.input.activePointer.isDown;
-    const cancelInput = isOverUI && fromClick;
+    ).length > 0;
 
     if (!!this.input.activePointer.isDown && !this._state.upKeyDown && !this._state.isDead) {
       this._state.upKeyDown = true;
@@ -8359,18 +8374,7 @@ _showwippopup() {
       if (this._level && this._level._orbSprites && this._level.container) {
         try {
         let _drawn = 0;
-        const _orbTypeColorMap = {
-          36: 0xfffb57,
-          84: 0x58ffff,
-          141: 0xff52f0,
-          444: 0xff00d2,
-          1022: 0x63ff5f,
-          1330: 0xffffff,
-          1333: 0xff6326,
-          1594: 0x6cff6b,
-          1704: 0x04ff04,
-          1751: 0xff00d2
-        };
+        const _orbTypeColorMap = GameScene._ORB_TYPE_COLOR_MAP;
         for (let _oSpr of this._level._orbSprites) {
           if (_drawn >= 4) break;
           if (!_oSpr || !_oSpr.visible || !_oSpr.active || !_oSpr.scene) continue;
@@ -8411,24 +8415,32 @@ _showwippopup() {
       if (this._macroBot?.playing) {
         this._macroBot.step(this._physicsFrame);
       }
-      const _dualInputState = {
-        upKeyDown: this._state.upKeyDown,
-        upKeyPressed: this._state.upKeyPressed,
-        queuedHold: this._state.queuedHold,
-        orbActivationConsumedForPress: !!this._state._orbActivationConsumedForPress
-      };
-      const _primaryGravityBefore = !!this._state.gravityFlipped;
-      const _primarySharedBefore = this._getDualSharedSignature(this._state);
+      let _dualInputState = null;
+      let _primaryGravityBefore = false;
+      let _primarySharedBefore = null;
+      if (this._isDual) {
+        _dualInputState = {
+          upKeyDown: this._state.upKeyDown,
+          upKeyPressed: this._state.upKeyPressed,
+          queuedHold: this._state.queuedHold,
+          orbActivationConsumedForPress: !!this._state._orbActivationConsumedForPress
+        };
+        _primaryGravityBefore = !!this._state.gravityFlipped;
+        _primarySharedBefore = this._getDualSharedSignature(this._state);
+      }
       this._player.updateJump(verticalDelta);
       this._state.y += this._state.yVelocity * verticalDelta;
       this._player.checkCollisions(this._playerWorldX - centerX);
-      const _primaryGravityChanged = this._isDual && !!this._state.gravityFlipped !== _primaryGravityBefore;
+      let _primaryGravityChanged = false;
       let _primaryGravitySynced = false;
-      if (this._isDual && this._getDualSharedSignature(this._state) !== _primarySharedBefore) {
-        _primaryGravitySynced = this._syncDualGlobalsFromPrimary({
-          skipBallInputGravity: _primaryGravityChanged && this._state.isBall && _dualInputState.upKeyPressed,
-          skipSpiderInputGravity: _primaryGravityChanged && this._state.isSpider && _dualInputState.upKeyPressed
-        });
+      if (this._isDual) {
+        _primaryGravityChanged = !!this._state.gravityFlipped !== _primaryGravityBefore;
+        if (this._getDualSharedSignature(this._state) !== _primarySharedBefore) {
+          _primaryGravitySynced = this._syncDualGlobalsFromPrimary({
+            skipBallInputGravity: _primaryGravityChanged && this._state.isBall && _dualInputState.upKeyPressed,
+            skipSpiderInputGravity: _primaryGravityChanged && this._state.isSpider && _dualInputState.upKeyPressed
+          });
+        }
       }
       if (this._isDual && this._state.isDead && !this._state2.isDead) {
         this._player2.killPlayer();
