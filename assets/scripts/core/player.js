@@ -163,9 +163,9 @@ class WaveTrail {
     this._active = false;
     this._posInit = false;
     this._pos = { x: 0, y: 0 };
-    this._maxAge = 0.6;
-    this._minSegSq = 2.5 * 2.5;
-    this._maxPoints = 180;
+    this._maxAge = 0.42;
+    this._minSegSq = 2.25 * 2.25;
+    this._maxPoints = 140;
     this._baseHalfW = 5.5;
     this._baseGlowHalfW = 12;
     this._halfW = this._baseHalfW;
