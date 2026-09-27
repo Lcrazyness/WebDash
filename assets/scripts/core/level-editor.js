@@ -2705,6 +2705,50 @@ class LevelEditor {
   }
 
 
+  _undoEditorAction() {
+    if (!this._editorHistoryUndo?.length || this._editorHistoryRestoring) return false;
+    const entry = this._editorHistoryUndo.pop();
+    this._editorHistoryRedo.push(entry);
+    if (!this._restoreEditorHistorySnapshot(entry.before)) {
+        this._editorHistoryRedo.pop();
+        this._editorHistoryUndo.push(entry);
+        return false;
+    }
+    return true;
+  }
+
+
+  _redoEditorAction() {
+    if (!this._editorHistoryRedo?.length || this._editorHistoryRestoring) return false;
+    const entry = this._editorHistoryRedo.pop();
+    this._editorHistoryUndo.push(entry);
+    if (!this._restoreEditorHistorySnapshot(entry.after)) {
+        this._editorHistoryUndo.pop();
+        this._editorHistoryRedo.push(entry);
+        return false;
+    }
+    return true;
+  }
+
+
+  _updateEditorHistoryButtons() {
+    const canUndo = (this._editorHistoryUndo?.length || 0) > 0;
+    const canRedo = (this._editorHistoryRedo?.length || 0) > 0;
+
+    if (this._undoBtn) {
+        this._undoBtn.setAlpha(canUndo ? 1 : 0.35);
+        if (canUndo) this._undoBtn.setInteractive();
+        else this._undoBtn.disableInteractive();
+    }
+
+    if (this._redoBtn) {
+        this._redoBtn.setAlpha(canRedo ? 1 : 0.35);
+        if (canRedo) this._redoBtn.setInteractive();
+        else this._redoBtn.disableInteractive();
+    }
+  }
+
+
   _copySelectedObjectsToClipboard() {
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     const sources = selectedObjectIds
