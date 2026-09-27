@@ -2659,6 +2659,52 @@ class LevelEditor {
   }
 
 
+  _restoreEditorHistorySnapshot(snapshot) {
+    if (!snapshot || typeof this._level?._resetEditorObjectRuntime !== "function") return false;
+
+    this._editorHistoryRestoring = true;
+    try {
+        const objects = Array.isArray(snapshot.objects) ? JSON.parse(JSON.stringify(snapshot.objects)) : [];
+        const settings = typeof snapshot.settings === "string" ? snapshot.settings : "";
+
+        this._level._resetEditorObjectRuntime();
+        this._level._sourceLevelObjects = objects;
+        this._level._spawnLevelObjects(objects);
+        this._level._setUpSettings(settings);
+        window.levelObjects = objects;
+        window.settingslist = settings;
+
+        const selectedKeys = new Set(Array.isArray(snapshot.selectedKeys) ? snapshot.selectedKeys : []);
+        const restoredIds = [];
+        for (const object of objects) {
+            if (!object || !object._editorHistoryUid) continue;
+            if (selectedKeys.has(object._editorHistoryUid) && Number.isInteger(object._eeObjectId)) {
+                restoredIds.push(object._eeObjectId);
+            }
+        }
+
+        this._currentSelectedObjectIds = [];
+        window.editorSelectedObject = -1;
+        if (restoredIds.length) this._selectEditorObjectsByIds(restoredIds, 0x00ff00);
+        else this._clearEditorSelection();
+
+        this._applyEditorLayerFilter?.();
+        this._refreshEditorCollisionCaches?.();
+        this._refreshEditorLayerSelectorVisual?.();
+        this._refreshEditorPlaytestGlowVisibility?.();
+        this._buildObjectGrid?.();
+        this._updateEditorActionButtons?.();
+        this._updateEditorHistoryButtons?.();
+        return true;
+    } catch (error) {
+        console.warn("Editor history restore failed:", error);
+        return false;
+    } finally {
+        this._editorHistoryRestoring = false;
+    }
+  }
+
+
   _copySelectedObjectsToClipboard() {
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     const sources = selectedObjectIds
