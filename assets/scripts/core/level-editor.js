@@ -98,6 +98,8 @@ class LevelEditor {
     this._editorBoxSelectStart = null;
     this._editorBoxSelectGraphics = null;
     this._currentSelectedObjectIds = [];
+    this._editorClipboard = [];
+    this._editorPasteCount = 0;
     this._editorTab = "build";
     window.editorSelectedObject = -1;
     this._editorZoom = 1.0;
@@ -171,30 +173,110 @@ class LevelEditor {
         this._setEditorTab("delete");
     });
 
+    const isEditorShortcut = (event) => {
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return false;
+        return !!(event?.ctrlKey || event?.metaKey);
+    };
+
+    this.input.keyboard.on('keydown-C', (event) => {
+        if (!isEditorShortcut(event)) return;
+        event.preventDefault();
+        this._copySelectedObjectsToClipboard();
+    });
+
+    this.input.keyboard.on('keydown-V', (event) => {
+        if (!isEditorShortcut(event)) return;
+        event.preventDefault();
+        this._pasteEditorClipboard();
+    });
+
+    this.input.keyboard.on('keydown-X', (event) => {
+        if (!isEditorShortcut(event)) return;
+        event.preventDefault();
+        this._copySelectedObjectsToClipboard();
+        this._deleteSelectedObject();
+    });
+
+    this.input.keyboard.on('keydown-D', (event) => {
+        if (isEditorShortcut(event)) {
+            event.preventDefault();
+            this._duplicateSelectedObject(30, 0);
+            return;
+        }
+
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
+        event?.preventDefault?.();
+        const amount = event.shiftKey ? 1 : 60;
+        moveSelectedObjectsWithKey(60, 0);
+    });
+
+    this.input.keyboard.on('keydown-S', (event) => {
+        if (isEditorShortcut(event)) {
+            event.preventDefault();
+            this._saveEditorLevel();
+            return;
+        }
+
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
+        event?.preventDefault?.();
+        const amount = event.shiftKey ? 1 : 60;
+        moveSelectedObjectsWithKey(0, amount);
+    });
+
     const moveSelectedObjectsWithKey = (dx, dy) => {
         if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
         this._moveObject(dx, dy);
     };
 
     this.input.keyboard.on('keydown-W', (event) => {
+        if (event?.ctrlKey || event?.metaKey) return;
         event?.preventDefault?.();
         const amount = event.shiftKey ? 1 : 60;
         moveSelectedObjectsWithKey(0, -amount);
     });
+
     this.input.keyboard.on('keydown-A', (event) => {
+        if (event?.ctrlKey || event?.metaKey) return;
         event?.preventDefault?.();
         const amount = event.shiftKey ? 1 : 60;
         moveSelectedObjectsWithKey(-amount, 0);
     });
-    this.input.keyboard.on('keydown-S', (event) => {
+
+    this.input.keyboard.on('keydown-Q', (event) => {
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
         event?.preventDefault?.();
-        const amount = event.shiftKey ? 1 : 60;
-        moveSelectedObjectsWithKey(0, amount);
+        this._rotateObject(-15);
     });
-    this.input.keyboard.on('keydown-D', (event) => {
+
+    this.input.keyboard.on('keydown-E', (event) => {
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
         event?.preventDefault?.();
-        const amount = event.shiftKey ? 1 : 60;
-        moveSelectedObjectsWithKey(amount, 0);
+        this._rotateObject(15);
+    });
+
+    this.input.keyboard.on('keydown-Y', (event) => {
+        if (event?.ctrlKey || event?.metaKey) return;
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
+        event?.preventDefault?.();
+        this._flipObject("y");
+    });
+
+    this.input.keyboard.on('keydown-DELETE', (event) => {
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
+        event?.preventDefault?.();
+        this._deleteSelectedObject();
+    });
+
+    this.input.keyboard.on('keydown-BACKSPACE', (event) => {
+        if (this._editorTextInputFocused || this._editorPlaytestActive || this._editorPlaytestPaused) return;
+        event?.preventDefault?.();
+        this._deleteSelectedObject();
+    });
+
+    this.input.keyboard.on('keydown-ESC', (event) => {
+        if (this._editorTextInputFocused || this._editorPlaytestActive) return;
+        event?.preventDefault?.();
+        this._clearEditorSelection();
     });
 
     this._createEditorGui();
@@ -901,49 +983,171 @@ class LevelEditor {
   }
 
 
+  _getEditorGameplayStateAtX(worldX) {
+    const state = {
+      gameMode: parseInt(window.settingsMap?.["kA2"] ?? 0, 10) || 0,
+      miniMode: parseInt(window.settingsMap?.["kA3"] ?? 0, 10) === 1 ? 1 : 0,
+      speed: parseInt(window.settingsMap?.["kA4"] ?? 0, 10) || 0,
+      dualMode: parseInt(window.settingsMap?.["kA8"] ?? 0, 10) === 1 ? 1 : 0,
+      mirrored: parseInt(window.settingsMap?.["kA28"] ?? 0, 10) === 1 ? 1 : 0,
+      gravityFlipped: String(window.settingsMap?.["kA11"] ?? 0) === "1"
+    };
+
+    const speedKeys = {
+      200: 1,
+      201: 0,
+      202: 2,
+      203: 3,
+      1334: 4
+    };
+
+    const modeById = {
+      12: 0,
+      13: 1,
+      47: 2,
+      111: 3,
+      660: 4,
+      745: 5,
+      1331: 6
+    };
+
+    const gravityById = {
+      10: true,
+      11: false
+    };
+
+    const objects = Array.isArray(window.levelObjects) ? window.levelObjects : [];
+
+    const events = [];
+
+    objects.forEach((obj, index) => {
+      if (!obj || this._isEditorStartPositionId(obj.id)) return;
+
+      const id = parseInt(obj.id ?? 0, 10);
+      const xValue = Number(obj._raw?.["2"] ?? obj.x ?? 0);
+      const wx = Number.isFinite(xValue) ? xValue * 2 : 0;
+
+      if (wx > Number(worldX || 0) + 0.001) return;
+
+      const objectDef = typeof getObjectFromId === "function" ? getObjectFromId(id) : null;
+      const objectType = objectDef?.type || "";
+
+      if (speedKeys[id] === undefined &&
+          objectType !== "portal" &&
+          objectType !== "speed") {
+        return;
+      }
+
+      events.push({ obj, id, wx, objectDef, index });
+    });
+
+    events.sort((a, b) => (a.wx - b.wx) || (a.index - b.index));
+
+    for (const event of events) {
+      const { id, objectDef } = event;
+
+      if (speedKeys[id] !== undefined) {
+        state.speed = speedKeys[id];
+      }
+
+      if (objectDef?.type === "speed") {
+        const mapped = speedKeys[id];
+        if (mapped !== undefined) state.speed = mapped;
+      }
+
+      if (modeById[id] !== undefined) {
+        state.gameMode = modeById[id];
+      }
+
+      if (gravityById[id] !== undefined) {
+        state.gravityFlipped = gravityById[id];
+      }
+
+      const sub = String(
+        objectDef?.sub ??
+        ({
+          10: "gravity_flip",
+          11: "gravity_normal",
+          12: "cube",
+          13: "fly",
+          45: "mirrora",
+          46: "mirrorb",
+          47: "ball",
+          660: "wave",
+          111: "ufo",
+          745: "robot",
+          1331: "spider",
+          286: "dual_on",
+          287: "dual_off",
+          45: "mirrora",
+          46: "mirrorb"
+        }[id] ?? "")
+      );
+
+      if (sub === "shrink" || id === 101) state.miniMode = 1;
+      if (sub === "grow" || id === 99) state.miniMode = 0;
+      if (sub === "dual_on" || id === 286) state.dualMode = 1;
+      if (sub === "dual_off" || id === 287) state.dualMode = 0;
+      if (sub === "mirrora" || id === 45) state.mirrored = 1;
+      if (sub === "mirrorb" || id === 46) state.mirrored = 0;
+      if (sub === "gravity_flip" || id === 10) state.gravityFlipped = true;
+      if (sub === "gravity_normal" || id === 11) state.gravityFlipped = false;
+    }
+
+    return state;
+  }
+
   _getLatestEditorStartPosition() {
     const positions = [];
 
     if (Array.isArray(window.levelObjects)) {
-        window.levelObjects.forEach((obj, index) => {
-            if (!obj || !this._isEditorStartPositionId(obj.id)) return;
+      window.levelObjects.forEach((obj, index) => {
+        if (!obj || !this._isEditorStartPositionId(obj.id)) return;
 
-            const raw = obj._raw || {};
-            const x = Number(raw["2"] ?? obj.x ?? 0);
-            const y = Number(raw["3"] ?? obj.y ?? 30);
-            const objectId = Number.isInteger(obj._eeObjectId) ? obj._eeObjectId : index;
+        const raw = obj._raw || {};
+        const x = Number(raw["2"] ?? obj.x ?? 0);
+        const y = Number(raw["3"] ?? obj.y ?? 30);
+        const worldX = Number.isFinite(x) ? x * 2 : 0;
+        const worldY = Number.isFinite(y) ? y * 2 : 30;
+        const objectId = Number.isInteger(obj._eeObjectId) ? obj._eeObjectId : index;
+        const autoState = this._getEditorGameplayStateAtX(worldX);
 
-            positions.push({
-                x: Number.isFinite(x) ? x * 2 : 0,
-                y: Number.isFinite(y) ? y * 2 : 30,
-                gameMode: this._getEditorStartPositionValue(obj, "kA2", 0),
-                miniMode: this._getEditorStartPositionValue(obj, "kA3", 0),
-                speed: this._getEditorStartPositionValue(obj, "kA4", 0),
-                dualMode: this._getEditorStartPositionValue(obj, "kA8", 0),
-                mirrored: 0,
-                gravityFlipped: this._getEditorStartPositionValue(obj, "kA11", obj.flipGravity ? 1 : 0) === 1,
-                _editorObjectId: objectId,
-                _editorSaveIndex: index
-            });
+        positions.push({
+          x: worldX,
+          y: worldY,
+          gameMode: autoState.gameMode,
+          miniMode: autoState.miniMode,
+          speed: autoState.speed,
+          dualMode: autoState.dualMode,
+          mirrored: autoState.mirrored,
+          gravityFlipped: autoState.gravityFlipped,
+          _editorObjectId: objectId,
+          _editorSaveIndex: index
         });
+      });
     }
 
     if (!Array.isArray(window.levelObjects) && !positions.length && this._level?.getStartPositions) {
-        const levelPositions = this._level.getStartPositions();
-        if (Array.isArray(levelPositions)) {
-            positions.push(...levelPositions.map((pos, index) => ({
-                ...pos,
-                mirrored: 0,
-                _editorObjectId: Number.isInteger(pos?._editorObjectId) ? pos._editorObjectId : index,
-                _editorSaveIndex: index
-            })));
-        }
+      const levelPositions = this._level.getStartPositions();
+      if (Array.isArray(levelPositions)) {
+        positions.push(...levelPositions.map((pos, index) => ({
+          ...pos,
+          mirrored: pos.mirrored ?? 0,
+          _editorObjectId: Number.isInteger(pos?._editorObjectId) ? pos._editorObjectId : index,
+          _editorSaveIndex: index
+        })));
+      }
     }
 
-    positions.sort((a, b) => ((a.x || 0) - (b.x || 0)) || ((a._editorObjectId || 0) - (b._editorObjectId || 0)) || ((a._editorSaveIndex || 0) - (b._editorSaveIndex || 0)));
+    positions.sort(
+      (a, b) =>
+        ((a.x || 0) - (b.x || 0)) ||
+        ((a._editorObjectId || 0) - (b._editorObjectId || 0)) ||
+        ((a._editorSaveIndex || 0) - (b._editorSaveIndex || 0))
+    );
+
     return positions.length ? positions[positions.length - 1] : null;
   }
-
 
   _applyEditorPlaytestStartPosition(pos) {
     if (!pos) {
@@ -2475,76 +2679,27 @@ class LevelEditor {
   }
 
 
-  _duplicateSelectedObject() {
+  _duplicateSelectedObject(offsetX = 30, offsetY = 0) {
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
-    if (!selectedObjectIds.length) return;
+    if (!selectedObjectIds.length) return false;
 
-    const newObjectIds = [];
+    const sources = selectedObjectIds
+      .map((selectedObjectId) => this._getEditorSaveObjectForObjectId(selectedObjectId))
+      .filter(Boolean);
 
-    for (const selectedObjectId of selectedObjectIds) {
-        const src = this._getEditorSaveObjectForObjectId(selectedObjectId);
-        if (!src) continue;
+    const newObjectIds = this._spawnEditorObjectCopies(sources, offsetX, offsetY);
 
-        const clone = JSON.parse(JSON.stringify(src));
-        const cloneObjectId = parseInt(clone.id ?? 0, 10);
-        if (cloneObjectId === 142 && !this._canPlaceSecretCoin(142)) continue;
-        delete clone._eeObjectId;
-
-        window.levelObjects.push(clone);
-        this._level._spawnObject(clone);
-
-        const newObjectId = Number.isInteger(clone._eeObjectId)
-            ? clone._eeObjectId
-            : Math.max(0, (this._level._nextObjectId || 1) - 1);
-        const newestSprites = this._level.objectSprites[newObjectId];
-
-        if (newestSprites && newestSprites.length) {
-            const depthBase = {
-                "-5": -12,
-                "-3": -9,
-                "-1": -6,
-                0: 0,
-                1: 3,
-                3: 6,
-                5: 9,
-                7: 10.5,
-                9: 12,
-                11: 13.5
-            };
-
-            const finalDepth =
-                (depthBase[clone.zLayer] || 0) +
-                (clone.zOrder * 0.01);
-
-            for (const spr of newestSprites) {
-                if (!spr) continue;
-
-                spr.setDepth((spr._eeZDepth || finalDepth) + 10);
-
-                if (spr._eeLayer === 2) {
-                    if (this._level.topContainer && !this._level.topContainer.exists(spr)) {
-                        this._level.topContainer.add(spr);
-                    }
-                } else if (this._level.container && !this._level.container.exists(spr)) {
-                    this._level.container.add(spr);
-                }
-            }
-        }
-
-        newObjectIds.push(newObjectId);
+    if (!newObjectIds.length) {
+      this._clearEditorSelection();
+      return false;
     }
 
-    if (newObjectIds.length) {
-        this._selectEditorObjectsByIds(newObjectIds, 0x00ffff);
-    } else {
-        this._clearEditorSelection();
-    }
-
+    this._selectEditorObjectsByIds(newObjectIds, 0x00ffff);
     this._applyEditorLayerFilter?.();
     this._refreshEditorCollisionCaches();
     this._buildObjectGrid();
+    return true;
   }
-
 
   _deleteSelectedObject() {
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
