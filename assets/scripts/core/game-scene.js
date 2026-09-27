@@ -3752,12 +3752,12 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
     this._startPosIndex = -1;
 
     this.input.keyboard.on('keydown-Q', () => {
-      if (!window.startPosSwitcher) return;
+      if (window.isEditor || !window.startPosSwitcher) return;
       this.changeStartPos(-1);
     });
 
     this.input.keyboard.on('keydown-E', () => {
-      if (!window.startPosSwitcher) return;
+      if (window.isEditor || !window.startPosSwitcher) return;
       this.changeStartPos(1);
     });
 
