@@ -44,13 +44,21 @@ if (window.gameCache) {
   }
 }
 
+let initialFpsCap = 0;
+try {
+  const savedSettings = JSON.parse(localStorage.getItem("gd_settings") || "{}");
+  initialFpsCap = Math.max(0, Math.min(1000, Math.round(Number(savedSettings.fpsCap) || 0)));
+} catch (error) {
+  initialFpsCap = 0;
+}
+
 const phaserConfig = {
   type: Phaser.AUTO,
   width: screenWidth,
   height: screenHeight,
   resolution: 1,
   fps: {
-    limit: 0,
+    limit: initialFpsCap,
     smoothStep: true
   },
   backgroundColor: "#000000",
