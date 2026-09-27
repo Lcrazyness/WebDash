@@ -2240,6 +2240,7 @@ class LevelEditor {
         this._selectEditorObjectsByIds([selectedObjectId], this._currentSelectedTintByObjectId?.[selectedObjectId] ?? 0x00ff00);
         this._refreshEditorCollisionCaches();
         this._applyEditorLayerFilter?.();
+        this._commitEditorHistory(editorHistoryBefore);
         return;
     }
 
@@ -2751,7 +2752,6 @@ class LevelEditor {
         if (canRedo) this._redoBtn.setInteractive();
         else this._redoBtn.disableInteractive();
     }
-    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
@@ -2870,9 +2870,9 @@ class LevelEditor {
     this._refreshEditorPlaytestGlowVisibility?.();
     this._buildObjectGrid();
     this._updateEditorActionButtons();
+    this._commitEditorHistory(editorHistoryBefore);
 
     return true;
-    this._commitEditorHistory(editorHistoryBefore);
   }
 
 
