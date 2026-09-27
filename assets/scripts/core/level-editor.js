@@ -1078,9 +1078,7 @@ class LevelEditor {
           745: "robot",
           1331: "spider",
           286: "dual_on",
-          287: "dual_off",
-          45: "mirrora",
-          46: "mirrorb"
+          287: "dual_off"
         }[id] ?? "")
       );
 
@@ -1162,7 +1160,6 @@ class LevelEditor {
     this._state.lastGroundPosY = startPosY;
     this._state.onGround = true;
     this._state.canJump = true;
-    this._player.setCubeVisible(true);
 
     const speedValues = [
         SpeedPortal.ONE_TIMES,
@@ -1187,12 +1184,14 @@ class LevelEditor {
         this._player.enterRobotMode();
     } else if (gamemode == 6) {
         this._player.enterSpiderMode();
+    } else {
+        this._player.setCubeVisible(true);
     }
 
     this._state.isMini = parseInt(pos.miniMode ?? 0, 10) === 1;
     this._state.gravityFlipped = !!pos.gravityFlipped;
-    this._state.mirrored = false;
-    this._state2.mirrored = false;
+    this._state.mirrored = !!pos.mirrored;
+    this._state2.mirrored = !!pos.mirrored;
 
     if (parseInt(pos.dualMode ?? 0, 10) === 1) {
         this._enableDualMode();
