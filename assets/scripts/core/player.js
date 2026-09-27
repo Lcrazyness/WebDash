@@ -3696,36 +3696,43 @@ if (this.p.isFlying || this.p.isUfo) {
         }
       }
     }
-  _updateWaveJump(dt) {
-      const _baseSpeed = this.p.isMini ? 22.7700072 : 11.3850036;
-      const _speedMod = (playerSpeed / 11.540004);
-      const _waveVel = _baseSpeed * _speedMod;
-      const isPushingUp = this.p.upKeyDown; 
-      let _0x312a7f = (isPushingUp ? 1 : -1) * this.flipMod() * _waveVel;
+_updateWaveJump(dt) {
+    const _baseSpeed = this.p.isMini ? 22.7700072 : 11.3850036;
+    const _speedMod = (playerSpeed / 11.540004);
+    const _waveVel = _baseSpeed * _speedMod;
+    const isPushingUp = this.p.upKeyDown; 
+    let _0x312a7f = (isPushingUp ? 1 : -1) * this.flipMod() * _waveVel;
+    let onSurface = false;
 
-      if (this.p.onGround || this.p.onCeiling) {
-          const movingAwayFromCeiling = this.p.onCeiling && !isPushingUp;
-          const movingAwayFromFloor = this.p.onGround && isPushingUp;
+    if (this.p.onGround || this.p.onCeiling) {
+        const movingAwayFromCeiling = this.p.onCeiling && !isPushingUp;
+        const movingAwayFromFloor = this.p.onGround && isPushingUp;
 
-          if (movingAwayFromCeiling || movingAwayFromFloor) {
-              this.p.onGround = false;
-              this.p.onCeiling = false;
-          } else {
-              _0x312a7f = 0;
-          }
-      }
+        if (movingAwayFromCeiling || movingAwayFromFloor) {
+            this.p.onGround = false;
+            this.p.onCeiling = false;
+        } else {
+            _0x312a7f = 0;
+            onSurface = true;
+        }
+    }
 
-      this.p.yVelocity = _0x312a7f;
-      this.p.canJump = false;
-      this.p.isJumping = false;
+    if (onSurface) {
+        this.p.yVelocity = _0x312a7f; // keep instant snap only while riding a wall
+    } else {
+        const smoothFactor = window.waveSmoothFactor ?? 0.42; // lower = smoother, 1 = old snappy behavior
+        this.p.yVelocity += (_0x312a7f - this.p.yVelocity) * Math.min(1, smoothFactor);
+    }
 
-      const _waveAngle = this.p.isMini ? (62 * Math.PI / 180) : Math.PI / 4;
-      const _targetRotation = _0x312a7f === 0 ? 0 : _0x312a7f > 0 ? -_waveAngle : _waveAngle;
-      const _turnRate = 0.55;
-      const _0x5c24f7 = dt || 0;
-      const _turnT = Math.min(1, _turnRate * _0x5c24f7);
-      this._rotation = this.slerp2D(this._rotation, _targetRotation, _turnT);
-  }
+    this.p.canJump = false;
+    this.p.isJumping = false;
+
+    const _waveAngle = this.p.isMini ? (62 * Math.PI / 180) : Math.PI / 4;
+    const _targetRotation = this.p.yVelocity === 0 ? 0 : this.p.yVelocity > 0 ? -_waveAngle : _waveAngle;
+    const _turnRate = 0.55;
+    const _turnT = Math.min(1, _turnRate * (dt || 0));
+    this._rotation = this.slerp2D(this._rotation, _targetRotation, _turnT);
+}
   _updateRobotJump(dt) {
     if (!this.rotateActionActive) {
       this.updateGroundRotation(dt);
