@@ -5121,6 +5121,7 @@ _buildSettingsPopup() {
         "Show FPS": "Shows the frames per second your game is running at.",
         "Solid Wave Trail": "Removes the extra details of the wave trail.",
         "Show CPS": "Shows when you click in a level in the top left of your screen.",
+        "FPS Cap": "Sets the maximum game update/render rate. 0 = Unlimited.",
         "Show Glow": "Shows glow for basic object sets.",
         "Use Proxy (for schools)": "Enables a proxy for a better chance to see online levels when blocked.",
         "Cull Distance": "Changes how many objects are shown. [DOES NOT SAVE!!]",
