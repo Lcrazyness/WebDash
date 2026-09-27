@@ -1662,6 +1662,37 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
             return String(levelString);
         }
     };
+    this._queueSyncedLevelText = async (levelFileName, localPath) => {
+        const rawName = String(levelFileName || "");
+        const ids = rawName.match(/\d+/g);
+        const levelId = ids && ids.length ? ids[ids.length - 1] : "";
+
+        if (levelId) {
+            try {
+                const liveUrl = "https://web-dashers.github.io/assets/levels/" + levelId + ".txt";
+                const response = await fetch(liveUrl, {
+                    cache: "no-store",
+                    credentials: "omit"
+                });
+
+                if (response.ok) {
+                    const liveData = await response.text();
+                    if (liveData && liveData.trim().length > 20 && this.cache?.text) {
+                        this.cache.text.add(levelFileName, liveData);
+                        window._webDashLevelSyncSource = "live";
+                        return "live";
+                    }
+                }
+            } catch (error) {
+                console.warn("Live level sync failed, using local copy:", error);
+            }
+        }
+
+        this.load.text(levelFileName, localPath);
+        window._webDashLevelSyncSource = "local";
+        return "local";
+    };
+
     this._exportGMD = (level) => {
         const encodedDesc = btoa(unescape(encodeURIComponent(level.description || "")));
         const authorName = "Web Dashers";
@@ -4360,8 +4391,8 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
             
             const loadingText = this.add.bitmapText(cx, cy, "goldFont", "Downloading Level Assets...", 20).setOrigin(0.5).setDepth(200);
             
-            this.load.text(levelFileName, "assets/levels/" + levelFileName.split("_")[1] + ".txt");
-            this.load.audio(songID, "assets/music/" + songFileName + ".mp3");
+            const localLevelPath = "assets/levels/" + levelFileName.split("_")[1] + ".txt";
+            loadingText.setText("Syncing Level...");
 
             this.load.once("complete", () => {
                 loadingText.destroy();
@@ -4373,7 +4404,10 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
                 this.scene.restart(); 
             });
 
-            this.load.start();
+            this._queueSyncedLevelText(levelFileName, localLevelPath).then(() => {
+                this.load.audio(songID, "assets/music/" + songFileName + ".mp3");
+                this.load.start();
+            });
         } else {
           this.tweens.killTweensOf(cardBounceContainer, "scale");
           this.tweens.add({ targets: cardBounceContainer, scale: 1, duration: 200, ease: "Quad.Out" });
@@ -8193,8 +8227,8 @@ _showwippopup() {
           screenWidth / 2, screenHeight / 2, "goldFont", "Downloading Level Assets...", 20
         ).setOrigin(0.5).setDepth(200);
 
-        this.load.text(levelFileName, "assets/levels/" + levelFileName.split("_")[1] + ".txt");
-        this.load.audio(songID, "assets/music/" + songFileName + ".mp3");
+        const localLevelPath = "assets/levels/" + levelFileName.split("_")[1] + ".txt";
+        loadingText.setText("Syncing Level...");
 
         this.load.once("complete", () => {
           loadingText.destroy();
@@ -8204,9 +8238,12 @@ _showwippopup() {
           this.input.enabled = true;
           this.game.registry.set("autoStartGame", true);
           this.scene.restart();
-          });
+        });
 
+        this._queueSyncedLevelText(levelFileName, localLevelPath).then(() => {
+          this.load.audio(songID, "assets/music/" + songFileName + ".mp3");
           this.load.start();
+        });
           return;
         }
         this._openLevelSelect();
