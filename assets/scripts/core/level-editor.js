@@ -279,7 +279,7 @@ class LevelEditor {
         this._clearEditorSelection();
     });
 
-    window._webDashEditorShortcutScene = gameScene;
+    window._webDashEditorShortcutScene = this;
     if (!window._webDashEditorShortcutHandlerBound) {
         window._webDashEditorShortcutHandlerBound = true;
         window.addEventListener("keydown", (event) => {
