@@ -8090,18 +8090,33 @@ _showwippopup() {
   }
   update(_0x54fa47, deltaTime) {
     if (window.isEditor) {
+        this._editorUiAccumulator = (this._editorUiAccumulator || 0) + deltaTime;
+        const editorUiTick = this._editorUiAccumulator >= 33.333;
+        if (editorUiTick) this._editorUiAccumulator = 0;
+
         if (this._editorPlaytestActive && !this._editorPlaytestPaused) {
             this._levelEditor._updateEditorPlaytest(deltaTime);
-            this._levelEditor._updateEditorGrid();
-            this._levelEditor._updateEditorTimeline();
+            if (editorUiTick) {
+                this._levelEditor._updateEditorGrid();
+                this._levelEditor._updateEditorTimeline();
+            }
             return;
         }
 
         if (window.isEditorPause) return;
         const pointer = this.input.activePointer;
-        this._hitObjects = this.input.hitTestPointer(pointer);
-        this._levelEditor._handleEditorCamera(deltaTime); 
-        this._levelEditor._updateEditorGrid(); 
+        const pointerChanged =
+            pointer.x !== this._lastEditorPointerX ||
+            pointer.y !== this._lastEditorPointerY;
+
+        if (pointerChanged || pointer.isDown || !this._hitObjects) {
+            this._hitObjects = this.input.hitTestPointer(pointer);
+            this._lastEditorPointerX = pointer.x;
+            this._lastEditorPointerY = pointer.y;
+        }
+
+        this._levelEditor._handleEditorCamera(deltaTime);
+        if (editorUiTick) this._levelEditor._updateEditorGrid(); 
         if (pointer.isDown && !this._isDraggingSlider) {
             if (this._isSwipeEnabled) {
               if (this._editorTab !== "edit") {
@@ -8127,7 +8142,7 @@ _showwippopup() {
                 }
             }
         }
-        this._levelEditor._updateEditorTimeline();
+        if (editorUiTick) this._levelEditor._updateEditorTimeline();
         if (this._editorPlaytestActive && this._editorPlaytestPaused) {
             this._levelEditor._refreshEditorPlaytestGlowVisibility();
             this._levelEditor._syncEditorPlaytestPlayerVisual(deltaTime / 1000);
@@ -8150,37 +8165,53 @@ _showwippopup() {
     } else {
         displayValue = Math.floor(rawPercent) + "%";
     }
-    this._percentageLabel.setText(displayValue);
+    if (displayValue !== this._lastPercentageDisplayValue) {
+      this._lastPercentageDisplayValue = displayValue;
+      this._percentageLabel.setText(displayValue);
+    }
     this._percentageLabel.setVisible(window.showPercentage && !this._menuActive);
     this._startPosGui.setVisible(window.startPosSwitcher && !this._menuActive);
     this._noclipIndicator.setVisible(window.noClip && !this._menuActive);
-    this._accuracyIndicator.setVisible(window.noClip && window.noClipAccuracy && !this._menuActive);
-    this._deathsIndicator.setVisible(window.noClip && window.noClipAccuracy && !this._menuActive);
-    this._accuracyIndicator.setText(`${this._player.noclipStats.accuracy.toFixed(2)}%`);
-    this._deathsIndicator.setText(`${this._player.noclipStats.deaths} Deaths`);
+    const accuracyVisible = window.noClip && window.noClipAccuracy && !this._menuActive;
+    this._accuracyIndicator.setVisible(accuracyVisible);
+    this._deathsIndicator.setVisible(accuracyVisible);
+
+    this._accuracyUiAccumulator = (this._accuracyUiAccumulator || 0) + deltaTime;
+    if (this._accuracyUiAccumulator >= 100) {
+      this._accuracyUiAccumulator = 0;
+      this._accuracyIndicator.setText(`${this._player.noclipStats.accuracy.toFixed(2)}%`);
+      this._deathsIndicator.setText(`${this._player.noclipStats.deaths} Deaths`);
+    }
 
     this._cpsIndicator.setVisible(window.showCPS && !this._menuActive);
-    if (this._clickHistory && this._clickHistory.length > 0) {
-      const _cpsNow = this.time.now;
-      let _cpsCut = 0;
-      while (_cpsCut < this._clickHistory.length && _cpsNow - this._clickHistory[_cpsCut] > 1000) {
-        _cpsCut++;
-      }
-      if (_cpsCut > 0) this._clickHistory.splice(0, _cpsCut);
-      this._cpsIndicator.setText(`${this._clickHistory.length} CPS`);
-    } else {
-      this._cpsIndicator.setText("0 CPS");
-    }
-    if (this._state.upKeyDown && !this._levelWon && !this._state.isDead){
+    if (this._state.upKeyDown && !this._levelWon && !this._state.isDead) {
       if (this._cpsIndicator.tint !== 0x00ff00) {
         this._cpsIndicator.setTint(0x00ff00);
         if (!this._clickHistory) this._clickHistory = [];
         this._clickHistory.push(this.time.now);
       }
-    } else{
+    } else if (this._cpsIndicator.tint !== 0xffffff) {
       this._cpsIndicator.setTint(0xffffff);
     }
-    this._cpsIndicator.setPosition(10, 10 + (window.noClip * 20) + (window.noClip && window.noClipAccuracy * 40));
+
+    this._cpsUiAccumulator = (this._cpsUiAccumulator || 0) + deltaTime;
+    if (this._cpsUiAccumulator >= 50) {
+      this._cpsUiAccumulator = 0;
+      const cpsNow = this.time.now;
+      if (this._clickHistory?.length) {
+        let cpsCut = 0;
+        while (cpsCut < this._clickHistory.length && cpsNow - this._clickHistory[cpsCut] > 1000) {
+          cpsCut++;
+        }
+        if (cpsCut > 0) this._clickHistory.splice(0, cpsCut);
+      }
+      this._cpsIndicator.setText(`${this._clickHistory?.length || 0} CPS`);
+    }
+
+    this._cpsIndicator.setPosition(
+      10,
+      10 + (window.noClip * 20) + (window.noClip && window.noClipAccuracy * 40)
+    );
 
     this._bottedIndicator.setVisible(this._macroBot?.playing);
     this._bottedIndicator.setPosition(10, 10 + (window.noClip * 20) + (window.noClip && window.noClipAccuracy * 40) + (window.showCPS * 20));
