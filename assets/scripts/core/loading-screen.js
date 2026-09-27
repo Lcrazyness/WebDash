@@ -124,7 +124,7 @@ class BootScene extends Phaser.Scene {
     const cy = H / 2;
 
     const LOADING_MESSAGES = [
-      "Only one?",
+      "ab was here. just make sure you tell him to add verity?",
       "Listen to the music to help time your jumps",
       "Back for more are ya?",
       "Use practice mode to learn the layout of a level",
