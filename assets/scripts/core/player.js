@@ -163,7 +163,7 @@ class WaveTrail {
     this._active = false;
     this._posInit = false;
     this._pos = { x: 0, y: 0 };
-    this._maxAge = 0.45;
+    this._maxAge = 0.6;
     this._minSegSq = 2.5 * 2.5;
     this._maxPoints = 180;
     this._baseHalfW = 5.5;
@@ -209,48 +209,93 @@ class WaveTrail {
   }
 
   reset() {
-    this._pts.length = 0;
+    this._pts = [];
     this._posInit = false;
     this._gfx.clear();
     this._glowGfx.clear();
+  }
+
+  _getNormal(a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    return { x: -dy / len, y: dx / len };
+  }
+
+  _buildEdges(pts, halfW) {
+    const n = pts.length;
+    const upper = new Array(n);
+    const lower = new Array(n);
+    if (n < 2) return { upper, lower };
+
+    const normals = new Array(n - 1);
+    for (let i = 0; i < n - 1; i++) {
+      normals[i] = this._getNormal(pts[i], pts[i + 1]);
+    }
+
+    for (let i = 0; i < n; i++) {
+      let nx;
+      let ny;
+
+      if (i === 0) {
+        nx = normals[0].x;
+        ny = normals[0].y;
+      } else if (i === n - 1) {
+        nx = normals[n - 2].x;
+        ny = normals[n - 2].y;
+      } else {
+        nx = normals[i - 1].x + normals[i].x;
+        ny = normals[i - 1].y + normals[i].y;
+
+        const len = Math.sqrt(nx * nx + ny * ny);
+        if (len < 0.001) {
+          nx = normals[i].x;
+          ny = normals[i].y;
+        } else {
+          nx /= len;
+          ny /= len;
+        }
+
+        const dot = nx * normals[i].x + ny * normals[i].y;
+        const scale = Math.max(0.72, Math.min(1.35, 1 / Math.max(0.72, dot)));
+        nx *= scale;
+        ny *= scale;
+      }
+
+      upper[i] = {
+        x: pts[i].x + nx * halfW,
+        y: pts[i].y + ny * halfW
+      };
+      lower[i] = {
+        x: pts[i].x - nx * halfW,
+        y: pts[i].y - ny * halfW
+      };
+    }
+
+    return { upper, lower };
   }
 
   _drawRibbon(gfx, pts, halfW, color, baseAlpha) {
     const n = pts.length;
     if (n < 2) return;
 
+    const { upper, lower } = this._buildEdges(pts, halfW);
+
     for (let i = 0; i < n - 1; i++) {
-      const a = pts[i];
-      const b = pts[i + 1];
-
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len < 0.001) continue;
-
-      const nx = -dy / len;
-      const ny = dx / len;
-
-      const ax = a.x + nx * halfW;
-      const ay = a.y + ny * halfW;
-      const bx = b.x + nx * halfW;
-      const by = b.y + ny * halfW;
-      const cx = b.x - nx * halfW;
-      const cy = b.y - ny * halfW;
-      const dx2 = a.x - nx * halfW;
-      const dy2 = a.y - ny * halfW;
-
-      const alpha = Math.max(
-        0,
-        (1 - (a.age + b.age) * 0.5)
-      ) * baseAlpha;
-
+      const alpha = Math.max(0, (1 - (pts[i].age + pts[i + 1].age) * 0.5)) * baseAlpha;
       if (alpha <= 0.01) continue;
 
       gfx.fillStyle(color, alpha);
-
-      gfx.fillTriangle(ax, ay, bx, by, dx2, dy2);
-      gfx.fillTriangle(bx, by, cx, cy, dx2, dy2);
+      gfx.fillTriangle(
+        upper[i].x, upper[i].y,
+        upper[i + 1].x, upper[i + 1].y,
+        lower[i].x, lower[i].y
+      );
+      gfx.fillTriangle(
+        upper[i + 1].x, upper[i + 1].y,
+        lower[i + 1].x, lower[i + 1].y,
+        lower[i].x, lower[i].y
+      );
     }
   }
 
@@ -265,14 +310,11 @@ class WaveTrail {
     let alive = 0;
 
     for (let i = 0; i < this._pts.length; i++) {
-      const point = this._pts[i];
-      point.age += decay;
-
-      if (point.age < 1) {
-        this._pts[alive++] = point;
+      this._pts[i].age += decay;
+      if (this._pts[i].age < 1) {
+        this._pts[alive++] = this._pts[i];
       }
     }
-
     this._pts.length = alive;
 
     if (this._active) {
@@ -283,17 +325,13 @@ class WaveTrail {
         const last = this._pts[n - 1];
         const dx = this._pos.x - last.x;
         const dy = this._pos.y - last.y;
-
-        if (dx * dx + dy * dy < this._minSegSq) {
-          add = false;
-        }
+        if (dx * dx + dy * dy < this._minSegSq) add = false;
       }
 
       if (add) {
         if (this._pts.length >= this._maxPoints) {
           this._pts.shift();
         }
-
         this._pts.push({
           x: this._pos.x,
           y: this._pos.y,
@@ -307,20 +345,15 @@ class WaveTrail {
 
     if (this._pts.length < 2) return;
 
-    if (window.solidWave === true) {
-      this._drawRibbon(this._gfx, this._pts, this._halfW, this._color, 1);
-      return;
-    }
+    const solid = window.solidWave === true;
 
-    this._drawRibbon(this._glowGfx, this._pts, this._glowHalfW, this._glowColor, 0.2);
-    this._drawRibbon(this._gfx, this._pts, this._halfW, this._color, 0.95);
-    this._drawRibbon(
-      this._gfx,
-      this._pts,
-      Math.max(1.5, this._halfW * 0.28),
-      0xffffff,
-      0.5
-    );
+    if (solid) {
+      this._drawRibbon(this._gfx, this._pts, this._halfW, this._color, 1.0);
+    } else {
+      this._drawRibbon(this._glowGfx, this._pts, this._glowHalfW, this._glowColor, 0.2);
+      this._drawRibbon(this._gfx, this._pts, this._halfW, this._color, 0.95);
+      this._drawRibbon(this._gfx, this._pts, Math.max(1.5, this._halfW * 0.28), 0xffffff, 0.5);
+    }
   }
 }
 
