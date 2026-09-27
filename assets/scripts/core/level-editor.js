@@ -279,6 +279,44 @@ class LevelEditor {
         this._clearEditorSelection();
     });
 
+    window._webDashEditorShortcutScene = gameScene;
+    if (!window._webDashEditorShortcutHandlerBound) {
+        window._webDashEditorShortcutHandlerBound = true;
+        window.addEventListener("keydown", (event) => {
+            const scene = window._webDashEditorShortcutScene;
+            if (!scene || !window.isEditor) return;
+
+            const target = event.target;
+            const tag = String(target?.tagName || "").toUpperCase();
+            if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+
+            const modifier = !!(event.ctrlKey || event.metaKey);
+            if (!modifier) return;
+
+            const key = String(event.key || "").toLowerCase();
+            const blocked = key === "c" || key === "v" || key === "x" || key === "d" || key === "s";
+            if (!blocked) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (scene._editorTextInputFocused || scene._editorPlaytestActive || scene._editorPlaytestPaused) return;
+
+            if (key === "c") {
+                scene._copySelectedObjectsToClipboard?.();
+            } else if (key === "v") {
+                scene._pasteEditorClipboard?.();
+            } else if (key === "x") {
+                scene._copySelectedObjectsToClipboard?.();
+                scene._deleteSelectedObject?.();
+            } else if (key === "d") {
+                scene._duplicateSelectedObject?.(30, 0);
+            } else if (key === "s") {
+                scene._saveEditorLevel?.();
+            }
+        }, true);
+    }
+
     this._createEditorGui();
   }
 
@@ -985,15 +1023,15 @@ class LevelEditor {
 
   _getEditorGameplayStateAtX(worldX) {
     const state = {
-      gameMode: parseInt(window.settingsMap?.["kA2"] ?? 0, 10) || 0,
-      miniMode: parseInt(window.settingsMap?.["kA3"] ?? 0, 10) === 1 ? 1 : 0,
-      speed: parseInt(window.settingsMap?.["kA4"] ?? 0, 10) || 0,
-      dualMode: parseInt(window.settingsMap?.["kA8"] ?? 0, 10) === 1 ? 1 : 0,
-      mirrored: parseInt(window.settingsMap?.["kA28"] ?? 0, 10) === 1 ? 1 : 0,
+      gameMode: Number.parseInt(window.settingsMap?.["kA2"] ?? 0, 10) || 0,
+      miniMode: Number.parseInt(window.settingsMap?.["kA3"] ?? 0, 10) === 1 ? 1 : 0,
+      speed: Number.parseInt(window.settingsMap?.["kA4"] ?? 0, 10) || 0,
+      dualMode: Number.parseInt(window.settingsMap?.["kA8"] ?? 0, 10) === 1 ? 1 : 0,
+      mirrored: Number.parseInt(window.settingsMap?.["kA28"] ?? 0, 10) === 1 ? 1 : 0,
       gravityFlipped: String(window.settingsMap?.["kA11"] ?? 0) === "1"
     };
 
-    const speedKeys = {
+    const speedById = {
       200: 1,
       201: 0,
       202: 2,
@@ -1001,95 +1039,94 @@ class LevelEditor {
       1334: 4
     };
 
-    const modeById = {
-      12: 0,
-      13: 1,
-      47: 2,
-      111: 3,
-      660: 4,
-      745: 5,
-      1331: 6
+    const modeBySub = {
+      cube: 0,
+      fly: 1,
+      ship: 1,
+      ball: 2,
+      ufo: 3,
+      wave: 4,
+      robot: 5,
+      spider: 6
     };
 
-    const gravityById = {
-      10: true,
-      11: false
+    const fallbackSubById = {
+      10: "gravity_flip",
+      11: "gravity_normal",
+      12: "cube",
+      13: "fly",
+      45: "mirrora",
+      46: "mirrorb",
+      47: "ball",
+      660: "wave",
+      111: "ufo",
+      745: "robot",
+      1331: "spider",
+      286: "dual_on",
+      287: "dual_off"
     };
 
     const objects = Array.isArray(window.levelObjects) ? window.levelObjects : [];
-
     const events = [];
 
-    objects.forEach((obj, index) => {
-      if (!obj || this._isEditorStartPositionId(obj.id)) return;
+    for (let index = 0; index < objects.length; index++) {
+      const obj = objects[index];
+      if (!obj || this._isEditorStartPositionId(obj.id)) continue;
 
-      const id = parseInt(obj.id ?? 0, 10);
-      const xValue = Number(obj._raw?.["2"] ?? obj.x ?? 0);
-      const wx = Number.isFinite(xValue) ? xValue * 2 : 0;
+      const x = Number(obj._raw?.["2"] ?? obj.x ?? 0);
+      const objectX = Number.isFinite(x) ? x * 2 : 0;
+      if (objectX > Number(worldX || 0) + 0.001) continue;
 
-      if (wx > Number(worldX || 0) + 0.001) return;
-
+      const id = Number.parseInt(obj.id ?? 0, 10) || 0;
       const objectDef = typeof getObjectFromId === "function" ? getObjectFromId(id) : null;
-      const objectType = objectDef?.type || "";
+      const objectType = String(objectDef?.type ?? "");
 
-      if (speedKeys[id] === undefined &&
-          objectType !== "portal" &&
-          objectType !== "speed") {
-        return;
-      }
+      const speedValue = speedById[id];
+      const sub = String(objectDef?.sub ?? fallbackSubById[id] ?? "");
 
-      events.push({ obj, id, wx, objectDef, index });
-    });
+      const changesState =
+        speedValue !== undefined ||
+        objectType === "speed" ||
+        modeBySub[sub] !== undefined ||
+        sub === "shrink" ||
+        sub === "grow" ||
+        sub === "dual_on" ||
+        sub === "dual_off" ||
+        sub === "mirrora" ||
+        sub === "mirrorb" ||
+        sub === "gravity_flip" ||
+        sub === "gravity_normal" ||
+        sub === "gravity_toggle";
 
-    events.sort((a, b) => (a.wx - b.wx) || (a.index - b.index));
+      if (!changesState) continue;
+
+      events.push({ objectX, id, sub, speedValue, objectType, index });
+    }
+
+    events.sort((a, b) => (a.objectX - b.objectX) || (a.index - b.index));
 
     for (const event of events) {
-      const { id, objectDef } = event;
-
-      if (speedKeys[id] !== undefined) {
-        state.speed = speedKeys[id];
+      if (event.speedValue !== undefined) {
+        state.speed = event.speedValue;
       }
 
-      if (objectDef?.type === "speed") {
-        const mapped = speedKeys[id];
-        if (mapped !== undefined) state.speed = mapped;
+      if (event.objectType === "speed" && event.speedValue !== undefined) {
+        state.speed = event.speedValue;
       }
 
-      if (modeById[id] !== undefined) {
-        state.gameMode = modeById[id];
+      if (modeBySub[event.sub] !== undefined) {
+        state.gameMode = modeBySub[event.sub];
       }
 
-      if (gravityById[id] !== undefined) {
-        state.gravityFlipped = gravityById[id];
-      }
-
-      const sub = String(
-        objectDef?.sub ??
-        ({
-          10: "gravity_flip",
-          11: "gravity_normal",
-          12: "cube",
-          13: "fly",
-          45: "mirrora",
-          46: "mirrorb",
-          47: "ball",
-          660: "wave",
-          111: "ufo",
-          745: "robot",
-          1331: "spider",
-          286: "dual_on",
-          287: "dual_off"
-        }[id] ?? "")
-      );
-
-      if (sub === "shrink" || id === 101) state.miniMode = 1;
-      if (sub === "grow" || id === 99) state.miniMode = 0;
-      if (sub === "dual_on" || id === 286) state.dualMode = 1;
-      if (sub === "dual_off" || id === 287) state.dualMode = 0;
-      if (sub === "mirrora" || id === 45) state.mirrored = 1;
-      if (sub === "mirrorb" || id === 46) state.mirrored = 0;
-      if (sub === "gravity_flip" || id === 10) state.gravityFlipped = true;
-      if (sub === "gravity_normal" || id === 11) state.gravityFlipped = false;
+      if (event.sub === "shrink") state.miniMode = 1;
+      else if (event.sub === "grow") state.miniMode = 0;
+      else if (event.sub === "dual_on") state.dualMode = 1;
+      else if (event.sub === "dual_off") state.dualMode = 0;
+      else if (event.sub === "mirrora") state.mirrored = 1;
+      else if (event.sub === "mirrorb") state.mirrored = 0;
+      else if (event.sub === "gravity_flip") state.gravityFlipped = true;
+      else if (event.sub === "gravity_normal") state.gravityFlipped = false;
+      else if (event.sub === "gravity_toggle") state.gravityFlipped = !state.gravityFlipped;
     }
 
     return state;
@@ -1107,30 +1144,30 @@ class LevelEditor {
         const y = Number(raw["3"] ?? obj.y ?? 30);
         const worldX = Number.isFinite(x) ? x * 2 : 0;
         const worldY = Number.isFinite(y) ? y * 2 : 30;
+
         const objectId = Number.isInteger(obj._eeObjectId) ? obj._eeObjectId : index;
-        const autoState = this._getEditorGameplayStateAtX(worldX);
+        const state = this._getEditorGameplayStateAtX(worldX);
 
         positions.push({
           x: worldX,
           y: worldY,
-          gameMode: autoState.gameMode,
-          miniMode: autoState.miniMode,
-          speed: autoState.speed,
-          dualMode: autoState.dualMode,
-          mirrored: autoState.mirrored,
-          gravityFlipped: autoState.gravityFlipped,
+          gameMode: state.gameMode,
+          miniMode: state.miniMode,
+          speed: state.speed,
+          dualMode: state.dualMode,
+          mirrored: state.mirrored,
+          gravityFlipped: state.gravityFlipped,
           _editorObjectId: objectId,
           _editorSaveIndex: index
         });
       });
     }
 
-    if (!Array.isArray(window.levelObjects) && !positions.length && this._level?.getStartPositions) {
+    if (!positions.length && this._level?.getStartPositions) {
       const levelPositions = this._level.getStartPositions();
       if (Array.isArray(levelPositions)) {
         positions.push(...levelPositions.map((pos, index) => ({
           ...pos,
-          mirrored: pos.mirrored ?? 0,
           _editorObjectId: Number.isInteger(pos?._editorObjectId) ? pos._editorObjectId : index,
           _editorSaveIndex: index
         })));
