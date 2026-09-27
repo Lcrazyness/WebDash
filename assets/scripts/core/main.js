@@ -52,6 +52,56 @@ try {
   initialFpsCap = 0;
 }
 
+async function syncLiveLevelCatalog() {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = setTimeout(() => controller?.abort(), 1500);
+
+  try {
+    const response = await fetch("https://web-dashers.github.io/assets/scripts/game/allLevels.js", {
+      cache: "no-store",
+      credentials: "omit",
+      signal: controller?.signal
+    });
+
+    if (!response.ok) return;
+
+    const source = await response.text();
+    const start = source.indexOf("[");
+    const end = source.lastIndexOf("]");
+
+    if (start < 0 || end <= start) return;
+
+    const jsonText = source
+      .slice(start, end + 1)
+      .replace(/\/\*[\\s\\S]*?\*\//g, "")
+      .replace(/^\\s*\/\/.*$/gm, "")
+      .replace(/,\\s*([}\\]])/g, "$1");
+
+    const parsed = JSON.parse(jsonText);
+    if (!Array.isArray(parsed)) return;
+
+    const normalized = parsed.filter(level =>
+      Array.isArray(level) &&
+      level.length >= 4 &&
+      typeof level[0] === "string" &&
+      typeof level[1] === "string" &&
+      typeof level[2] === "string"
+    );
+
+    if (normalized.length) {
+      window.allLevels = normalized;
+      window._webDashLevelCatalogSource = "live";
+      window._webDashLevelCatalogSyncedAt = Date.now();
+    }
+  } catch (error) {
+    window._webDashLevelCatalogSource = "local";
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+const liveLevelCatalogSync = syncLiveLevelCatalog();
+
 const phaserConfig = {
   type: Phaser.AUTO,
   width: screenWidth,
@@ -76,7 +126,16 @@ const phaserConfig = {
   scene: [BootScene, GameScene]
 };
 
-new Phaser.Game(phaserConfig);
+const startWebDash = async () => {
+  try {
+    await liveLevelCatalogSync;
+  } catch (error) {
+  }
+
+  window.webDashGame = new Phaser.Game(phaserConfig);
+};
+
+startWebDash();
 
 window.clearGameCache = () => {
   if (window.gameCache) {
