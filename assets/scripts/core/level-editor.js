@@ -2618,6 +2618,26 @@ class LevelEditor {
   }
 
 
+  _captureEditorHistorySnapshot() {
+    const objects = Array.isArray(window.levelObjects) ? JSON.parse(JSON.stringify(window.levelObjects)) : [];
+    const settings = typeof window.settingslist === "string" ? String(window.settingslist) : "";
+    const selectedIds = this._getCurrentSelectedEditorObjectIds ? this._getCurrentSelectedEditorObjectIds() : [];
+    const selectedKeys = [];
+    for (let index = 0; index < objects.length; index++) {
+        const object = objects[index];
+        if (!object) continue;
+        if (!object._editorHistoryUid) {
+            object._editorHistoryUid = "editor-" + index + "-" + String(object._eeObjectId ?? "");
+        }
+    }
+    for (const objectId of selectedIds) {
+        const object = this._getEditorSaveObjectForObjectId(objectId);
+        if (object?._editorHistoryUid) selectedKeys.push(object._editorHistoryUid);
+    }
+    return { objects, settings, selectedKeys };
+  }
+
+
   _copySelectedObjectsToClipboard() {
     const selectedObjectIds = this._getCurrentSelectedEditorObjectIds();
     const sources = selectedObjectIds
