@@ -697,6 +697,74 @@ window.LevelObject = class LevelObject {
       return this._startPositions.slice().sort((a, b) => a.x - b.x);
   }
 
+  _resetEditorObjectRuntime() {
+    const containers = [this.container, this.additiveContainer, this.topContainer];
+    for (const container of containers) {
+      if (!container) continue;
+      if (typeof container.removeAll === "function") {
+        container.removeAll(true);
+      } else if (Array.isArray(container.list)) {
+        for (const child of [...container.list]) {
+          child?.destroy?.();
+        }
+      }
+    }
+
+    this.objects = [];
+    this.objectSprites = [];
+    this._glowSprites = [];
+    this._glowSpriteKeys = new Set();
+    this._colorTriggers = [];
+    this._colorTriggerIdx = 0;
+    this._touchColorTriggerActivated = new Set();
+    this._touchSpawnTriggerActivated = new Set();
+    this._touchMoveTriggerActivated = new Set();
+    this._audioScaleSprites = [];
+    this._editorTriggerVisuals = [];
+    this._orbSprites = [];
+    this._coinSprites = [];
+    this._sawSprites = [];
+    this._enterEffectTriggers = [];
+    this._enterEffectTriggerIdx = 0;
+    this._activeEnterEffect = 0;
+    this._activeExitEffect = 0;
+    this._moveTriggers = [];
+    this._moveTriggerIdx = 0;
+    this._activeMoveTweens = [];
+    this._alphaTriggers = [];
+    this._alphaTriggerIdx = 0;
+    this._activeAlphaTweens = [];
+    this._rotateTriggers = [];
+    this._rotateTriggerIdx = 0;
+    this._activeRotateTweens = [];
+    this._pulseTriggers = [];
+    this._pulseTriggerIdx = 0;
+    this._activePulses = [];
+    this._spawnTriggers = [];
+    this._spawnTriggerIdx = 0;
+    this._activeSpawnDelays = [];
+    this._colorChannelSprites = {};
+    this._groupSprites = {};
+    this._resetobject = {};
+    this._resetremovedobject = {};
+    this._groupOffsets = {};
+    this._groupOpacity = {};
+    this._groupColliders = {};
+    this._sections = [];
+    this._sectionContainers = [];
+    this._collisionSections = [];
+    this._nearbyBuffer = [];
+    this._visMinSec = -1;
+    this._visMaxSec = -1;
+    this._startPositions = [];
+    this._debugIdTextsList = [];
+    this._nextObjectId = 0;
+    this._lastObjectX = 0;
+    this._sourceLevelObjects = [];
+    if (Array.isArray(window._animatedSprites)) window._animatedSprites.length = 0;
+  }
+
+
   _breakblock(linkedObjectId) {
     if (!Number.isInteger(linkedObjectId)) return false;
 
