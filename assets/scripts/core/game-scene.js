@@ -3748,6 +3748,7 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
     this._rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
     this._aKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this._dKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this._initPrecisionInput();
 
     this._startPosIndex = -1;
 
@@ -5214,6 +5215,8 @@ _buildSettingsPopup() {
         "Solid Wave Trail": "Removes the extra details of the wave trail.",
         "Show CPS": "Shows when you click in a level in the top left of your screen.",
         "FPS Cap": "Sets the maximum game update/render rate. 0 = Unlimited.",
+        "CBF": "Click Between Frames. Uses timestamped input events so clicks are not limited to rendered frames.",
+        "CBS": "Click Between Steps. Registers input on a 480 TPS input grid between the normal 240 physics steps.",
         "Show Glow": "Shows glow for basic object sets.",
         "Use Proxy (for schools)": "Enables a proxy for a better chance to see online levels when blocked.",
         "Cull Distance": "Changes how many objects are shown. [DOES NOT SAVE!!]",
@@ -5459,6 +5462,30 @@ _buildSettingsPopup() {
             true,
             "Practice Music Bypass"
         );
+
+        createToggle(container, column2X, startY + (spacingY * 2), "CBF",
+            () => !!window.cbf,
+            (v) => {
+                window.cbf = !!v;
+                if (window.cbf) this._clearPrecisionInputQueue?.();
+            },
+            null,
+            25,
+            true,
+            "CBF"
+        );
+
+        createToggle(container, column2X, startY + (spacingY * 3), "CBS",
+            () => !!window.cbs,
+            (v) => {
+                window.cbs = !!v;
+                this._clearPrecisionInputQueue?.();
+            },
+            null,
+            25,
+            true,
+            "CBS"
+        );
     };
 
     const buildVisualPage = (container) => {
@@ -5671,6 +5698,8 @@ _buildSettingsPopup() {
         enableMiniIcon: window.enableMiniIcon,
         cullDistance: window.cullDistance,
         fpsCap: Number(window.fpsCap) || 0,
+        cbf: !!window.cbf,
+        cbs: !!window.cbs,
         settingInfoText: window.settingInfoText || {},
         enableLDM: window.enableLDM,
     };
@@ -5704,7 +5733,9 @@ _buildSettingsPopup() {
         enableMiniIcon: false,
         enableLDM: false,
         cullDistance: 3,
-        fpsCap: 0
+        fpsCap: 0,
+        cbf: false,
+        cbs: false
     };
 
     const data = { ...defaults, ...(saved ? JSON.parse(saved) : {}) };
@@ -5732,6 +5763,9 @@ _buildSettingsPopup() {
     window.enableMiniIcon = data.enableMiniIcon;
     window.cullDistance = typeof data.cullDistance !== 'undefined' ? data.cullDistance : 3;
     window.fpsCap = Math.max(0, Math.min(1000, Math.round(Number(data.fpsCap) || 0)));
+    window.cbf = !!data.cbf;
+    window.cbs = !!data.cbs;
+    this._clearPrecisionInputQueue?.();
     window.settingInfoText = data.settingInfoText || {};
     this._applyFpsCap(window.fpsCap);
     window.useDirectInternet = !!data.useDirectInternet;
@@ -7281,6 +7315,125 @@ _showwippopup() {
 
     this._applyLevelStartOptions();
   }
+  _precisionInputAllowed(event = null) {
+    if (window.isEditor || this._menuActive || this._slideIn || this._levelWon || this._paused || this._state?.isDead) return false;
+    if (this._settingsPopup || this._pauseContainer || this._infoPopup || this._updateLogPopup || this._macroPopup) return false;
+    if (event?.target && ["INPUT", "TEXTAREA", "SELECT"].includes(String(event.target.tagName || "").toUpperCase())) return false;
+
+    if (event?.type?.startsWith("pointer") && this.input?.activePointer) {
+      const hit = this.input.manager.hitTest(
+        this.input.activePointer,
+        this._startPosGui?.list || [],
+        this.cameras.main
+      );
+      if (hit && hit.length) return false;
+    }
+
+    return true;
+  }
+
+
+  _clearPrecisionInputQueue() {
+    this._precisionInputQueue = [];
+    this._precisionInputHeld = false;
+    this._precisionInputCursor = 0;
+  }
+
+
+  _queuePrecisionInput(type, timestamp) {
+    if (!window.cbf && !window.cbs) return;
+    this._precisionInputQueue = this._precisionInputQueue || [];
+
+    let eventTime = Number(timestamp);
+    if (!Number.isFinite(eventTime)) eventTime = performance.now();
+
+    if (!window.cbf && window.cbs) {
+      const quantum = 1000 / 480;
+      eventTime = Math.round(eventTime / quantum) * quantum;
+    }
+
+    this._precisionInputQueue.push({
+      type,
+      time: eventTime
+    });
+
+    if (this._precisionInputQueue.length > 128) {
+      this._precisionInputQueue.splice(0, this._precisionInputQueue.length - 128);
+    }
+  }
+
+
+  _applyPrecisionInputEvents(simulationTime) {
+    if ((!window.cbf && !window.cbs) || !Array.isArray(this._precisionInputQueue) || !this._precisionInputQueue.length) return;
+
+    this._precisionInputQueue.sort((a, b) => a.time - b.time);
+
+    let consumed = 0;
+    while (consumed < this._precisionInputQueue.length) {
+      const event = this._precisionInputQueue[consumed];
+      if (!event || event.time > simulationTime) break;
+
+      if (event.type === "press") {
+        this._precisionInputHeld = true;
+        this._pushButton(true);
+      } else if (event.type === "release") {
+        this._precisionInputHeld = false;
+        this._releaseButton(true);
+      }
+
+      consumed++;
+    }
+
+    if (consumed > 0) {
+      this._precisionInputQueue.splice(0, consumed);
+    }
+  }
+
+
+  _initPrecisionInput() {
+    if (this._precisionInputInitialized) return;
+    this._precisionInputInitialized = true;
+    this._precisionInputQueue = [];
+    this._precisionInputHeld = false;
+    this._precisionInputCursor = performance.now();
+
+    const isJumpKey = (event) => {
+      const code = String(event?.code || "");
+      return code === "Space" || code === "ArrowUp" || code === "KeyW" || code === "KeyL";
+    };
+
+    this._precisionKeyDownHandler = (event) => {
+      if ((!window.cbf && !window.cbs) || !isJumpKey(event) || event.repeat) return;
+      if (!this._precisionInputAllowed(event)) return;
+      this._queuePrecisionInput("press", performance.now());
+    };
+
+    this._precisionKeyUpHandler = (event) => {
+      if ((!window.cbf && !window.cbs) || !isJumpKey(event)) return;
+      if (!this._precisionInputAllowed(event)) return;
+      this._queuePrecisionInput("release", performance.now());
+    };
+
+    this._precisionPointerDownHandler = (event) => {
+      if ((!window.cbf && !window.cbs) || event.button !== undefined && event.button !== 0) return;
+      if (!this._precisionInputAllowed(event)) return;
+      this._queuePrecisionInput("press", performance.now());
+    };
+
+    this._precisionPointerUpHandler = (event) => {
+      if ((!window.cbf && !window.cbs) || event.button !== undefined && event.button !== 0) return;
+      if (!this._precisionInputAllowed(event)) return;
+      this._queuePrecisionInput("release", performance.now());
+    };
+
+    window.addEventListener("keydown", this._precisionKeyDownHandler, true);
+    window.addEventListener("keyup", this._precisionKeyUpHandler, true);
+    window.addEventListener("pointerdown", this._precisionPointerDownHandler, true);
+    window.addEventListener("pointerup", this._precisionPointerUpHandler, true);
+    window.addEventListener("pointercancel", this._precisionPointerUpHandler, true);
+  }
+
+
   _pushButton(ignoreMacro = false) {
     const objectsUnderPointer = this.input.manager.hitTest(
       this.input.activePointer, 
@@ -8371,6 +8524,10 @@ _showwippopup() {
       return;
     }
     this._applyJumpInput = () => {
+      if (window.cbf || window.cbs) {
+        this._spaceWasDown = this._precisionInputHeld;
+        return;
+      }
       const jumpHeld = this._spaceKey.isDown || this._upKey.isDown || this._wKey.isDown || this._lKey.isDown;
       if (!this._updateLogPopup && jumpHeld && !this._spaceWasDown) {
         this._pushButton();
@@ -8568,6 +8725,9 @@ _showwippopup() {
     }
     let quantizedDelta = this._quantizeDelta(deltaTime);
     let subSteps = quantizedDelta > 0 ? Math.max(1, Math.round(quantizedDelta * 4)) : 0;
+    if (window.cbs && !window.cbf) {
+      subSteps *= 2;
+    }
     if (subSteps > 60) {
       subSteps = 60;
     }
@@ -8579,6 +8739,17 @@ _showwippopup() {
     for (let i = 0; i < subSteps; i++) {
       this._state.lastY = this._state.y;
       this._physicsFrame++;
+      if (window.cbf || window.cbs) {
+        const now = performance.now();
+        if (!this._precisionInputFrameStart) {
+          this._precisionInputFrameStart = now - deltaTime;
+        }
+        const stepTime = this._precisionInputFrameStart + ((i + 1) / Math.max(1, subSteps)) * deltaTime;
+        this._applyPrecisionInputEvents(stepTime);
+        if (i === subSteps - 1) {
+          this._precisionInputFrameStart = now;
+        }
+      }
       this._applyJumpInput();
       if (this._macroBot?.playing) {
         this._macroBot.step(this._physicsFrame);
