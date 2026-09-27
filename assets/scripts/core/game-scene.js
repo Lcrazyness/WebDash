@@ -1708,17 +1708,49 @@ this._menuUpdateLogBtn = this.add.image(screenWidth - 30 - 50, 33, "GJ_WebSheet"
         xml += '</dict>';
         xml += '</plist>';
 
-        const blob = new Blob([xml], { type: "text/xml" });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
+        const blob = new Blob([xml], { type: "application/octet-stream" });
         const fileName = `${String(level.levelName || "Unnamed").replace(/[^a-z0-9]/gi, "_")}.gmd`;
 
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        try {
+            if (typeof navigator.msSaveOrOpenBlob === "function") {
+                navigator.msSaveOrOpenBlob(blob, fileName);
+                return;
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            link.rel = "noopener";
+            link.style.display = "none";
+            document.body.appendChild(link);
+
+            requestAnimationFrame(() => {
+                try {
+                    link.click();
+                } finally {
+                    setTimeout(() => {
+                        window.URL.revokeObjectURL(url);
+                        link.remove();
+                    }, 1500);
+                }
+            });
+        } catch (error) {
+            console.error("Level download failed:", error);
+            try {
+                const dataUrl = "data:application/octet-stream;charset=utf-8," + encodeURIComponent(xml);
+                const fallback = document.createElement("a");
+                fallback.href = dataUrl;
+                fallback.download = fileName;
+                fallback.style.display = "none";
+                document.body.appendChild(fallback);
+                fallback.click();
+                fallback.remove();
+            } catch (fallbackError) {
+                console.error("Level download fallback failed:", fallbackError);
+                alert("The level could not be downloaded. Please allow downloads for Web Dashers and try again.");
+            }
+        }
     };
     this._getNextLocalId = () => {
         const rawData = localStorage.getItem("created_levels");
@@ -5518,6 +5550,20 @@ _buildSettingsPopup() {
           true,
           "Cull Distance"
         );
+
+        createNumberInput(container, column2X, startY, "FPS Cap",
+          () => (typeof window.fpsCap !== 'undefined' ? window.fpsCap : 0),
+          (v) => {
+            window.fpsCap = Math.max(0, Math.min(1000, Math.round(Number(v) || 0)));
+            this._applyFpsCap(window.fpsCap);
+            this._saveSettings();
+          },
+          0,
+          1000,
+          true,
+          true,
+          "FPS Cap"
+        );
     };
 
     const buildPage = (idx) => {
@@ -5576,6 +5622,7 @@ _buildSettingsPopup() {
         enableOrbGuide: window.enableOrbGuide,
         enableMiniIcon: window.enableMiniIcon,
         cullDistance: window.cullDistance,
+        fpsCap: Number(window.fpsCap) || 0,
         settingInfoText: window.settingInfoText || {},
         enableLDM: window.enableLDM,
     };
@@ -5608,7 +5655,8 @@ _buildSettingsPopup() {
         enableOrbGuide: false,
         enableMiniIcon: false,
         enableLDM: false,
-        cullDistance: 3
+        cullDistance: 3,
+        fpsCap: 0
     };
 
     const data = { ...defaults, ...(saved ? JSON.parse(saved) : {}) };
@@ -5635,10 +5683,48 @@ _buildSettingsPopup() {
     window.enableOrbGuide = data.enableOrbGuide;
     window.enableMiniIcon = data.enableMiniIcon;
     window.cullDistance = typeof data.cullDistance !== 'undefined' ? data.cullDistance : 3;
+    window.fpsCap = Math.max(0, Math.min(1000, Math.round(Number(data.fpsCap) || 0)));
     window.settingInfoText = data.settingInfoText || {};
+    this._applyFpsCap(window.fpsCap);
     window.useDirectInternet = !!data.useDirectInternet;
     localStorage.setItem("gd_useDirectInternet", String(!!window.useDirectInternet));
     window.enableLDM = !!data.enableLDM;
+  }
+  _applyFpsCap(value) {
+    const cap = Math.max(0, Math.min(1000, Math.round(Number(value) || 0)));
+    window.fpsCap = cap;
+
+    const loop = this.game?.loop;
+    if (!loop) return;
+
+    try {
+      if (!loop._webDashUnlimitedStep) {
+        loop._webDashUnlimitedStep = loop.step;
+      }
+      if (!loop._webDashLimitedStep && typeof loop.stepLimitFPS === "function") {
+        loop._webDashLimitedStep = loop.stepLimitFPS;
+      }
+
+      if (typeof loop.setLimitFPS === "function") {
+        loop.setLimitFPS(cap);
+        return;
+      }
+
+      loop.fpsLimit = cap;
+      loop.targetFps = cap > 0 ? cap : 60;
+
+      if (cap > 0 && loop._webDashLimitedStep) {
+        loop._limitRate = 1000 / cap;
+        loop.hasFpsLimit = true;
+        loop.step = loop._webDashLimitedStep;
+      } else if (cap === 0 && loop._webDashUnlimitedStep) {
+        loop.hasFpsLimit = false;
+        loop._limitRate = 0;
+        loop.step = loop._webDashUnlimitedStep;
+      }
+    } catch (error) {
+      console.warn("Unable to update FPS cap:", error);
+    }
   }
   _buildMacroPopup() {
       if (this._macroPopup) return;
