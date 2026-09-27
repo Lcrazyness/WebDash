@@ -2152,6 +2152,7 @@ if (this.p.isFlying || this.p.isUfo) {
     this.exitBallMode();
     this.p.isWave = true;
     this.p.yVelocity = 0;
+    this._waveSmoothedVelocity = 0;
     this.p.onGround = false;
     this.p.canJump = false;
     this.p.isJumping = false;
@@ -3757,8 +3758,8 @@ _updateWaveJump(dt) {
         this._waveSmoothedVelocity = _targetWaveVelocity;
     }
 
-    const dtSec = dt > 1 ? dt / 1000 : dt;
-    const movementResponse = 1 - Math.exp(-dtSec / 0.045);
+    const dtSec = Math.max(0, dt > 1 ? dt / 1000 : dt);
+    const movementResponse = 1 - Math.exp(-dtSec / 0.12);
     this._waveSmoothedVelocity += (_targetWaveVelocity - this._waveSmoothedVelocity) * movementResponse;
 
     this.p.yVelocity = this._waveSmoothedVelocity;
@@ -3771,7 +3772,7 @@ _updateWaveJump(dt) {
         ? Math.max(-1, Math.min(1, this._waveSmoothedVelocity / _waveVel))
         : 0;
     const _targetRotation = -normalizedVelocity * _waveAngle;
-    const rotationResponse = 1 - Math.exp(-dtSec / 0.055);
+    const rotationResponse = 1 - Math.exp(-dtSec / 0.11);
     this._rotation += (_targetRotation - this._rotation) * rotationResponse;
 }
   _updateRobotJump(dt) {
