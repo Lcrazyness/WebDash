@@ -3738,9 +3738,8 @@ _updateWaveJump(dt) {
     const _baseSpeed = this.p.isMini ? 22.7700072 : 11.3850036;
     const _speedMod = (playerSpeed / 11.540004);
     const _waveVel = _baseSpeed * _speedMod;
-    const isPushingUp = this.p.upKeyDown; 
-    let _0x312a7f = (isPushingUp ? 1 : -1) * this.flipMod() * _waveVel;
-    let onSurface = false;
+    const isPushingUp = this.p.upKeyDown;
+    let _targetWaveVelocity = (isPushingUp ? 1 : -1) * this.flipMod() * _waveVel;
 
     if (this.p.onGround || this.p.onCeiling) {
         const movingAwayFromCeiling = this.p.onCeiling && !isPushingUp;
@@ -3750,19 +3749,30 @@ _updateWaveJump(dt) {
             this.p.onGround = false;
             this.p.onCeiling = false;
         } else {
-            _0x312a7f = 0;
-            onSurface = true;
+            _targetWaveVelocity = 0;
         }
     }
 
-    this.p.yVelocity = _0x312a7f;
+    if (!Number.isFinite(this._waveSmoothedVelocity)) {
+        this._waveSmoothedVelocity = _targetWaveVelocity;
+    }
+
+    const dtSec = dt > 1 ? dt / 1000 : dt;
+    const movementResponse = 1 - Math.exp(-dtSec / 0.045);
+    this._waveSmoothedVelocity += (_targetWaveVelocity - this._waveSmoothedVelocity) * movementResponse;
+
+    this.p.yVelocity = this._waveSmoothedVelocity;
 
     this.p.canJump = false;
     this.p.isJumping = false;
 
     const _waveAngle = this.p.isMini ? (62 * Math.PI / 180) : Math.PI / 4;
-    const _targetRotation = this.p.yVelocity === 0 ? 0 : this.p.yVelocity > 0 ? -_waveAngle : _waveAngle;
-    this._rotation = _targetRotation;
+    const normalizedVelocity = _waveVel > 0
+        ? Math.max(-1, Math.min(1, this._waveSmoothedVelocity / _waveVel))
+        : 0;
+    const _targetRotation = -normalizedVelocity * _waveAngle;
+    const rotationResponse = 1 - Math.exp(-dtSec / 0.055);
+    this._rotation += (_targetRotation - this._rotation) * rotationResponse;
 }
   _updateRobotJump(dt) {
     if (!this.rotateActionActive) {
