@@ -2625,21 +2625,25 @@ class LevelEditor {
 
 
   _captureEditorHistorySnapshot() {
-    const objects = Array.isArray(window.levelObjects) ? JSON.parse(JSON.stringify(window.levelObjects)) : [];
-    const settings = typeof window.settingslist === "string" ? String(window.settingslist) : "";
+    const sourceObjects = Array.isArray(window.levelObjects) ? window.levelObjects : [];
     const selectedIds = this._getCurrentSelectedEditorObjectIds ? this._getCurrentSelectedEditorObjectIds() : [];
     const selectedKeys = [];
-    for (let index = 0; index < objects.length; index++) {
-        const object = objects[index];
+
+    for (let index = 0; index < sourceObjects.length; index++) {
+        const object = sourceObjects[index];
         if (!object) continue;
         if (!object._editorHistoryUid) {
-            object._editorHistoryUid = "editor-" + index + "-" + String(object._eeObjectId ?? "");
+            object._editorHistoryUid = "editor-" + index + "-" + String(object._eeObjectId ?? "") + "-" + Math.random().toString(36).slice(2, 8);
         }
     }
+
     for (const objectId of selectedIds) {
         const object = this._getEditorSaveObjectForObjectId(objectId);
         if (object?._editorHistoryUid) selectedKeys.push(object._editorHistoryUid);
     }
+
+    const objects = JSON.parse(JSON.stringify(sourceObjects));
+    const settings = typeof window.settingslist === "string" ? String(window.settingslist) : "";
     return { objects, settings, selectedKeys };
   }
 
@@ -3210,6 +3214,7 @@ class LevelEditor {
 
     if (parseInt(objId ?? 0, 10) === 749) {
         this._applyTeleportExitPlacement(transformedX, transformedY);
+        this._commitEditorHistory(editorHistoryBefore);
         return;
     }
 
