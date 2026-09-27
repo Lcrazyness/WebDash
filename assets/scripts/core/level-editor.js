@@ -100,6 +100,10 @@ class LevelEditor {
     this._currentSelectedObjectIds = [];
     this._editorClipboard = [];
     this._editorPasteCount = 0;
+    this._editorHistoryUndo = [];
+    this._editorHistoryRedo = [];
+    this._editorHistoryRestoring = false;
+    this._editorHistoryLimit = 75;
     this._editorTab = "build";
     window.editorSelectedObject = -1;
     this._editorZoom = 1.0;
