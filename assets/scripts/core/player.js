@@ -163,9 +163,9 @@ class WaveTrail {
     this._active = false;
     this._posInit = false;
     this._pos = { x: 0, y: 0 };
-    this._maxAge = 0.42;
-    this._minSegSq = 2.25 * 2.25;
-    this._maxPoints = 140;
+    this._maxAge = 0.22;
+    this._minSegSq = 1.75 * 1.75;
+    this._maxPoints = 96;
     this._baseHalfW = 5.5;
     this._baseGlowHalfW = 12;
     this._halfW = this._baseHalfW;
@@ -3755,21 +3755,14 @@ _updateWaveJump(dt) {
         }
     }
 
-    if (onSurface) {
-        this.p.yVelocity = _0x312a7f; // keep instant snap only while riding a wall
-    } else {
-        const smoothFactor = window.waveSmoothFactor ?? 0.42; // lower = smoother, 1 = old snappy behavior
-        this.p.yVelocity += (_0x312a7f - this.p.yVelocity) * Math.min(1, smoothFactor);
-    }
+    this.p.yVelocity = _0x312a7f;
 
     this.p.canJump = false;
     this.p.isJumping = false;
 
     const _waveAngle = this.p.isMini ? (62 * Math.PI / 180) : Math.PI / 4;
     const _targetRotation = this.p.yVelocity === 0 ? 0 : this.p.yVelocity > 0 ? -_waveAngle : _waveAngle;
-    const _turnRate = 0.55;
-    const _turnT = Math.min(1, _turnRate * (dt || 0));
-    this._rotation = this.slerp2D(this._rotation, _targetRotation, _turnT);
+    this._rotation = _targetRotation;
 }
   _updateRobotJump(dt) {
     if (!this.rotateActionActive) {
