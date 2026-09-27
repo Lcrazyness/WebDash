@@ -12,11 +12,14 @@ function checkForAutoLoad() {
   }
   return false;
 }
+
 if (window.gameCache) {
   window.gameCache.init();
   const canAutoLoad = checkForAutoLoad();
+
   if (canAutoLoad) {
     const autoLoadIndicator = document.createElement('div');
+
     autoLoadIndicator.style.cssText = `
       position: fixed;
       top: 10px;
@@ -29,8 +32,10 @@ if (window.gameCache) {
       font-size: 12px;
       z-index: 9999;
     `;
+
     autoLoadIndicator.textContent = 'turbo loading';
     document.body.appendChild(autoLoadIndicator);
+
     setTimeout(() => {
       if (autoLoadIndicator.parentNode) {
         autoLoadIndicator.parentNode.removeChild(autoLoadIndicator);
@@ -38,12 +43,14 @@ if (window.gameCache) {
     }, 3000);
   }
 }
+
 const phaserConfig = {
   type: Phaser.AUTO,
   width: screenWidth,
   height: screenHeight,
   resolution: 1,
   fps: {
+    limit: 0,
     smoothStep: true
   },
   backgroundColor: "#000000",
@@ -60,6 +67,7 @@ const phaserConfig = {
   },
   scene: [BootScene, GameScene]
 };
+
 new Phaser.Game(phaserConfig);
 
 window.clearGameCache = () => {
@@ -76,5 +84,6 @@ window.getCacheInfo = () => {
   if (window.gameCache) {
     return window.gameCache.getCacheStats();
   }
+
   return null;
 };
