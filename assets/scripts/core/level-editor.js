@@ -477,6 +477,7 @@ class LevelEditor {
     });
     this._makeBouncyButton(this._undoBtn, 1, () => this._undoEditorAction(), () => (this._editorHistoryUndo?.length || 0) > 0);
     this._makeBouncyButton(this._redoBtn, 1, () => this._redoEditorAction(), () => (this._editorHistoryRedo?.length || 0) > 0);
+    this._updateEditorHistoryButtons();
 
     this._editorLayerOptions = this._getEditorLayerOptions ? this._getEditorLayerOptions() : [null, 0];
     this._editorActiveLayerIndex = 0;
