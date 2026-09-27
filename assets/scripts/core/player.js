@@ -164,9 +164,9 @@ class WaveTrail {
     this._posInit = false;
     this._pos = { x: 0, y: 0 };
     this._maxAge = 0.6;
-    this._minSegSq = 1.5 * 1.5;
-    this._baseHalfW = 7;
-    this._baseGlowHalfW = 14;
+    this._minSegSq = 2.25;
+    this._baseHalfW = 5.5;
+    this._baseGlowHalfW = 12;
     this._halfW = this._baseHalfW;
     this._glowHalfW = this._baseGlowHalfW;
     this._gfx = scene.add.graphics();
@@ -174,151 +174,185 @@ class WaveTrail {
     this._glowGfx = scene.add.graphics();
     this._glowGfx.setBlendMode(Phaser.BlendModes.ADD);
   }
+
   addToContainer(container, depth) {
     container.add(this._glowGfx);
     this._glowGfx.setDepth(depth - 1);
     container.add(this._gfx);
     this._gfx.setDepth(depth);
   }
-  setPosition(x, y) { this._pos.x = x; this._pos.y = y; this._posInit = true; }
-  setColor(color, glowColor = color) { this._color = color; this._glowColor = glowColor; }
+
+  setPosition(x, y) {
+    this._pos.x = x;
+    this._pos.y = y;
+    this._posInit = true;
+  }
+
+  setColor(color, glowColor = color) {
+    this._color = color;
+    this._glowColor = glowColor;
+  }
+
   setMiniScale(isMini) {
     const scale = isMini ? 0.6 : 1;
     this._halfW = this._baseHalfW * scale;
     this._glowHalfW = this._baseGlowHalfW * scale;
   }
-  start() { this._active = true; }
-  stop()  { this._active = false; }
-  reset() { this._pts = []; this._posInit = false; this._gfx.clear(); this._glowGfx.clear(); }
 
-  _intersect(p1, p2, p3, p4) {
-    const d1x = p2.x - p1.x, d1y = p2.y - p1.y;
-    const d2x = p4.x - p3.x, d2y = p4.y - p3.y;
-    const denom = d1x * d2y - d1y * d2x;
-    if (Math.abs(denom) < 1e-6) return { x: p2.x, y: p2.y };
-    const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / denom;
-    const tc = Math.max(-3, Math.min(3, t));
-    return { x: p1.x + d1x * tc, y: p1.y + d1y * tc };
+  start() {
+    this._active = true;
+  }
+
+  stop() {
+    this._active = false;
+  }
+
+  reset() {
+    this._pts = [];
+    this._posInit = false;
+    this._gfx.clear();
+    this._glowGfx.clear();
+  }
+
+  _getNormal(a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    return { x: -dy / len, y: dx / len };
   }
 
   _buildEdges(pts, halfW) {
     const n = pts.length;
     const upper = new Array(n);
     const lower = new Array(n);
+    if (n < 2) return { upper, lower };
 
-    // precompute per-segment normals
-    const segNx = new Array(n - 1);
-    const segNy = new Array(n - 1);
+    const normals = new Array(n - 1);
     for (let i = 0; i < n - 1; i++) {
-      const dx = pts[i + 1].x - pts[i].x;
-      const dy = pts[i + 1].y - pts[i].y;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      segNx[i] = -dy / len;
-      segNy[i] = dx / len;
+      normals[i] = this._getNormal(pts[i], pts[i + 1]);
     }
 
     for (let i = 0; i < n; i++) {
-      const p = pts[i];
-      let nx, ny;
+      let nx;
+      let ny;
 
       if (i === 0) {
-        nx = segNx[0]; ny = segNy[0];
+        nx = normals[0].x;
+        ny = normals[0].y;
       } else if (i === n - 1) {
-        nx = segNx[n - 2]; ny = segNy[n - 2];
+        nx = normals[n - 2].x;
+        ny = normals[n - 2].y;
       } else {
-        // miter: intersect the two offset edge lines for a sharp corner
-        const n1x = segNx[i - 1], n1y = segNy[i - 1];
-        const n2x = segNx[i],     n2y = segNy[i];
+        nx = normals[i - 1].x + normals[i].x;
+        ny = normals[i - 1].y + normals[i].y;
 
-        // upper edge intersection
-        const u1 = { x: pts[i - 1].x + n1x * halfW, y: pts[i - 1].y + n1y * halfW };
-        const u2 = { x: p.x          + n1x * halfW, y: p.y          + n1y * halfW };
-        const u3 = { x: p.x          + n2x * halfW, y: p.y          + n2y * halfW };
-        const u4 = { x: pts[i + 1].x + n2x * halfW, y: pts[i + 1].y + n2y * halfW };
-        const mu = this._intersect(u1, u2, u3, u4);
+        const len = Math.sqrt(nx * nx + ny * ny);
+        if (len < 0.001) {
+          nx = normals[i].x;
+          ny = normals[i].y;
+        } else {
+          nx /= len;
+          ny /= len;
+        }
 
-        // lower edge intersection
-        const l1 = { x: pts[i - 1].x - n1x * halfW, y: pts[i - 1].y - n1y * halfW };
-        const l2 = { x: p.x          - n1x * halfW, y: p.y          - n1y * halfW };
-        const l3 = { x: p.x          - n2x * halfW, y: p.y          - n2y * halfW };
-        const l4 = { x: pts[i + 1].x - n2x * halfW, y: pts[i + 1].y - n2y * halfW };
-        const ml = this._intersect(l1, l2, l3, l4);
-
-        upper[i] = mu;
-        lower[i] = ml;
-        continue;
+        const dot = nx * normals[i].x + ny * normals[i].y;
+        const scale = Math.max(0.72, Math.min(1.35, 1 / Math.max(0.72, dot)));
+        nx *= scale;
+        ny *= scale;
       }
 
-      upper[i] = { x: p.x + nx * halfW, y: p.y + ny * halfW };
-      lower[i] = { x: p.x - nx * halfW, y: p.y - ny * halfW };
+      upper[i] = {
+        x: pts[i].x + nx * halfW,
+        y: pts[i].y + ny * halfW
+      };
+      lower[i] = {
+        x: pts[i].x - nx * halfW,
+        y: pts[i].y - ny * halfW
+      };
     }
+
     return { upper, lower };
   }
 
-  _drawRibbon(gfx, pts, halfW, color, baseAlpha, antialias = false) {
+  _drawRibbon(gfx, pts, halfW, color, baseAlpha) {
     const n = pts.length;
     if (n < 2) return;
 
     const { upper, lower } = this._buildEdges(pts, halfW);
-    if (antialias) {
-      this._drawRibbon(gfx, pts, halfW + 0.5, color, baseAlpha * 0.5, false);
-    }
 
     for (let i = 0; i < n - 1; i++) {
-      const alpha = Math.max(0, (1 - (pts[i].age + pts[i+1].age) * 0.5)) * baseAlpha;
+      const alpha = Math.max(0, (1 - (pts[i].age + pts[i + 1].age) * 0.5)) * baseAlpha;
       if (alpha <= 0.01) continue;
 
       gfx.fillStyle(color, alpha);
-      
       gfx.fillTriangle(
         upper[i].x, upper[i].y,
-        upper[i+1].x, upper[i+1].y,
+        upper[i + 1].x, upper[i + 1].y,
         lower[i].x, lower[i].y
       );
       gfx.fillTriangle(
-        upper[i+1].x, upper[i+1].y,
-        lower[i+1].x, lower[i+1].y,
+        upper[i + 1].x, upper[i + 1].y,
+        lower[i + 1].x, lower[i + 1].y,
         lower[i].x, lower[i].y
       );
     }
   }
 
   update(delta) {
-    if (!this._posInit) { this._gfx.clear(); this._glowGfx.clear(); return; }
-    const decay = (delta / 1000) / this._maxAge;
+    if (!this._posInit) {
+      this._gfx.clear();
+      this._glowGfx.clear();
+      return;
+    }
 
+    const decay = (delta / 1000) / this._maxAge;
     let alive = 0;
+
     for (let i = 0; i < this._pts.length; i++) {
       this._pts[i].age += decay;
-      if (this._pts[i].age < 1) this._pts[alive++] = this._pts[i];
+      if (this._pts[i].age < 1) {
+        this._pts[alive++] = this._pts[i];
+      }
     }
     this._pts.length = alive;
 
     if (this._active) {
       const n = this._pts.length;
       let add = true;
+
       if (n > 0) {
         const last = this._pts[n - 1];
-        const dx = this._pos.x - last.x, dy = this._pos.y - last.y;
-        if (dx*dx + dy*dy < this._minSegSq) add = false;
+        const dx = this._pos.x - last.x;
+        const dy = this._pos.y - last.y;
+        if (dx * dx + dy * dy < this._minSegSq) add = false;
       }
-      if (add) this._pts.push({ x: this._pos.x, y: this._pos.y, age: 0 });
+
+      if (add) {
+        this._pts.push({
+          x: this._pos.x,
+          y: this._pos.y,
+          age: 0
+        });
+      }
     }
 
     this._gfx.clear();
     this._glowGfx.clear();
+
     if (this._pts.length < 2) return;
 
     const solid = window.solidWave === true;
+
     if (solid) {
       this._drawRibbon(this._gfx, this._pts, this._halfW, this._color, 1.0);
     } else {
-      this._drawRibbon(this._glowGfx, this._pts, this._glowHalfW, this._glowColor, 0.22);
+      this._drawRibbon(this._glowGfx, this._pts, this._glowHalfW, this._glowColor, 0.2);
       this._drawRibbon(this._gfx, this._pts, this._halfW, this._color, 0.95);
-      this._drawRibbon(this._gfx, this._pts, Math.round(this._halfW * 0.32), 0xffffff, 0.5);
+      this._drawRibbon(this._gfx, this._pts, Math.max(1.5, this._halfW * 0.28), 0xffffff, 0.5);
     }
   }
 }
+
 function ds(scene, x, y, frameName, depth, isVisible) {
   let atlasData = getAtlasFrame(scene, frameName);
   if (!atlasData) {
